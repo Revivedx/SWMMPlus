@@ -185,14 +185,5 @@
   "SW_Settings_Browse": "Explorar GameBanana",
   "SW_Settings_Browse_Desc": "Muestra la pestaña Explorar, que carga mods de Savage Wind desde la API de GameBanana. Desactívalo para no contactar nunca con GameBanana.",
   "Browse_RateLimited": "GameBanana está limitando las solicitudes, así que Explorar está en pausa. Inténtalo más tarde",
-  "Browse_ShowNsfw": "Haz clic para mostrar",
-  "SW_Settings_Misc": "Varios",
-  "SW_Settings_Cemuhook": "Movimiento Cemuhook",
-  "SW_Settings_Cemuhook_Desc": "Usa el giroscopio de un servidor Cemuhook (DSU) como BetterJoy, DS4Windows o una app del móvil. También funciona al abrir Savage Wind por separado.",
-  "SW_Settings_CemuhookServer": "Servidor",
-  "SW_Settings_CemuhookServer_Desc": "Dirección y puerto del servidor DSU. Normalmente 127.0.0.1:26760.",
-  "SW_Settings_CemuhookPrefer": "Preferir Cemuhook",
-  "SW_Settings_CemuhookPrefer_Desc": "Usar Cemuhook aunque el mando tenga giroscopio propio.",
-  "SW_Settings_Camera": "Sensibilidad de la cámara",
-  "SW_Settings_Camera_Desc": "Qué tan rápido gira la cámara con el stick derecho y el ratón. 100 % es la velocidad normal del juego."
+  "Browse_ShowNsfw": "Haz clic para mostrar"
 }

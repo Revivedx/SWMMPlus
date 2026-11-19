@@ -185,14 +185,5 @@
   "SW_Settings_Browse": "Обзор GameBanana",
   "SW_Settings_Browse_Desc": "Показывает вкладку «Обзор», которая загружает моды Savage Wind через API GameBanana. Отключите, чтобы никогда не обращаться к GameBanana.",
   "Browse_RateLimited": "GameBanana сейчас ограничивает запросы, поэтому «Обзор» приостановлен. Попробуйте позже",
-  "Browse_ShowNsfw": "Нажмите, чтобы показать",
-  "SW_Settings_Misc": "Прочее",
-  "SW_Settings_Cemuhook": "Движение Cemuhook",
-  "SW_Settings_Cemuhook_Desc": "Использовать гироскоп с сервера Cemuhook (DSU), например BetterJoy, DS4Windows или приложения на телефоне. Работает и при отдельном запуске Savage Wind.",
-  "SW_Settings_CemuhookServer": "Сервер",
-  "SW_Settings_CemuhookServer_Desc": "Адрес и порт сервера DSU. Обычно 127.0.0.1:26760.",
-  "SW_Settings_CemuhookPrefer": "Предпочитать Cemuhook",
-  "SW_Settings_CemuhookPrefer_Desc": "Использовать Cemuhook, даже если у контроллера есть свой гироскоп.",
-  "SW_Settings_Camera": "Чувствительность камеры",
-  "SW_Settings_Camera_Desc": "Скорость поворота камеры правым стиком и мышью. 100% — обычная скорость игры."
+  "Browse_ShowNsfw": "Нажмите, чтобы показать"
 }

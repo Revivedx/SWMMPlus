@@ -351,10 +351,12 @@ fn has_files(dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
-pub const LOADER_DLL: &str = "pdh.dll";
-pub const LOADER_BUILD: &str = "swmm.dll";
-const LOADER_BUILD_RAW: &str = "swmm_loader.dll";
-pub const LOADER_CONFIG: &str = "loader.ini";
+// SWMM put a loader DLL (pdh.dll) next to savagewind.exe, set SAVAGEWIND_ROMFS_OVERLAY for the whole user session
+// and wrote it into Steam's shortcuts, so the game found the mods when started on its own. SWMM+ puts nothing in the
+// game's folder or the user's environment: Savage Wind reads SWMM+'s deploy folder itself (its Mods tab), and Play
+// here passes the variable to that one process only (launch_command). cleanup_legacy undoes what SWMM left behind.
+const LEGACY_LOADER_DLL: &str = "pdh.dll";
+const LEGACY_LOADER_CONFIG: &str = "loader.ini";
 const LOADER_MARKER: &[u8] = b"SWMM-Loader";
 const LEGACY_LOADER_FILES: &[&str] = &["swmm.ini", "swmm_hook.log"];
 
@@ -367,23 +369,6 @@ fn is_our_loader(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn loader_build() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let dir = exe.parent()?;
-    [
-        dir.join(LOADER_BUILD),
-        dir.join(LOADER_BUILD_RAW),
-        dir.join("..").join(LOADER_BUILD),
-        dir.join("..").join(LOADER_BUILD_RAW),
-    ]
-    .into_iter()
-        .find(|p| p.is_file())
-}
-
-pub fn loader_config_path() -> PathBuf {
-    Settings::config_dir().join(LOADER_CONFIG)
-}
-
 fn game_dir(settings: &Settings) -> Option<PathBuf> {
     settings
         .savage_wind
@@ -393,119 +378,45 @@ fn game_dir(settings: &Settings) -> Option<PathBuf> {
         .and_then(|p| p.parent().map(Path::to_path_buf))
 }
 
-pub fn sync_loader(settings: &Settings) -> Result<std::string::String> {
-    if cfg!(target_os = "linux") {
-        return sync_linux(settings);
-    }
-    if !cfg!(windows) {
-        return Ok("The loader is only used on Windows and Linux".into());
-    }
-    let dir = game_dir(settings).context("Savage Wind's executable isn't set")?;
-    for name in LEGACY_LOADER_FILES {
-        let path = dir.join(name);
-        if path.is_file() {
-            let _ = std::fs::remove_file(path);
+/// Removes what SWMM's loader left: its DLL next to savagewind.exe (only when it carries SWMM's marker), its files,
+/// the persistent SAVAGEWIND_ROMFS_OVERLAY and the Steam shortcuts' copy of it. Safe to run every start; returns what
+/// it removed, for the log.
+pub fn cleanup_legacy(settings: &Settings) -> Vec<std::string::String> {
+    let mut done = Vec::new();
+    if let Some(dir) = game_dir(settings) {
+        let dll = dir.join(LEGACY_LOADER_DLL);
+        if dll.is_file() && is_our_loader(&dll) && std::fs::remove_file(&dll).is_ok() {
+            done.push(format!("removed SWMM's loader {}", dll.display()));
         }
-    }
-    let dll = dir.join(LOADER_DLL);
-    let overlay = overlay_dir(settings);
-    let enabled = overlay.is_some();
-    let sw = &settings.savage_wind;
-    let motion = sw.cemuhook;
-    let camera = sw.camera_sensitivity.clamp(10, 500);
-    let server = if sw.cemuhook_server.trim().is_empty() { "127.0.0.1:26760" } else { sw.cemuhook_server.trim() };
-    let config = format!(
-        "enabled = {}\noverlay = {}\nmotion = {}\nmotion_server = {}\ncamera_sensitivity = {}\n",
-        if enabled { 1 } else { 0 },
-        overlay.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
-        match (motion, sw.cemuhook_prefer) {
-            (false, _) => "off",
-            (true, false) => "auto",
-            (true, true) => "prefer",
-        },
-        server,
-        camera
-    );
-    fs::create_dir_all(Settings::config_dir())?;
-    fs::write(loader_config_path(), config)?;
-    if dll.exists() && !is_our_loader(&dll) {
-        anyhow_ext::bail!("{} in {} doesn't belong to SWMM, so it was left alone", LOADER_DLL, dir.display());
-    }
-    if !enabled && !motion && camera == 100 {
-        if dll.exists() {
-            let _ = std::fs::remove_file(&dll);
-        }
-        return Ok("Mods are off when Savage Wind is started on its own".into());
-    }
-    if let Some(system) = std::env::var_os("SystemRoot") {
-        if !Path::new(&system).join("System32").join("vcruntime140.dll").exists() {
-            anyhow_ext::bail!(
-                "The Microsoft Visual C++ Redistributable is missing, so the loader can't be installed. Get it \
-                 from https://aka.ms/vs/17/release/vc_redist.x64.exe"
-            );
-        }
-    }
-    let build = loader_build()
-        .with_context(|| format!("{LOADER_BUILD} wasn't found next to SWMM. Build it with build-windows.bat."))?;
-    let new = fs::read(&build)?;
-    if std::fs::read(&dll).map(|old| old != new).unwrap_or(true) {
-        if let Err(e) = fs::write(&dll, &new) {
-            if !dll.exists() {
-                return Err(e.into());
+        for name in LEGACY_LOADER_FILES {
+            let path = dir.join(name);
+            if path.is_file() && std::fs::remove_file(&path).is_ok() {
+                done.push(format!("removed {}", path.display()));
             }
-            log::warn!("Could not update {}: {e}", dll.display());
         }
     }
-    Ok(format!("Savage Wind loads the mods when started on its own ({})", dll.display()))
-}
-
-fn sync_linux(settings: &Settings) -> Result<std::string::String> {
-    let overlay = overlay_dir(settings).filter(|d| has_files(d));
-    set_persistent_env(overlay.as_deref())?;
-    let _ = match &overlay {
-        Some(path) => Command::new("systemctl")
-            .args(["--user", "set-environment"])
-            .arg(format!("{OVERLAY_ENV}={}", path.display()))
-            .status(),
-        None => Command::new("systemctl").args(["--user", "unset-environment", OVERLAY_ENV]).status(),
-    };
-    let exe = settings.savage_wind.executable.clone();
-    let changed = crate::steam::update_shortcuts(OVERLAY_ENV, overlay.as_deref(), |path| {
-        is_savage_wind_exe(path) || exe.as_deref().is_some_and(|e| same_file(e, path))
-    })
-    .unwrap_or_else(|e| {
-        log::warn!("Couldn't update the Steam shortcuts: {e}");
-        0
-    });
-    Ok(match (&overlay, changed) {
-        (None, _) => "Mods are off when Savage Wind is started on its own".into(),
-        (Some(_), 0) => "Savage Wind loads the mods when started on its own (after you log out and back in)".into(),
-        (Some(_), n) => format!(
-            "Savage Wind loads the mods when started on its own. {n} Steam shortcut(s) were updated: restart Steam to apply"
-        ),
-    })
-}
-
-pub fn remove_loader(settings: &Settings) -> Result<()> {
+    let config = Settings::config_dir().join(LEGACY_LOADER_CONFIG);
+    if config.is_file() && std::fs::remove_file(&config).is_ok() {
+        done.push(format!("removed {}", config.display()));
+    }
+    if legacy_env_present() {
+        match clear_persistent_env() {
+            Ok(()) => done.push(format!("cleared the persistent {OVERLAY_ENV}")),
+            Err(e) => log::warn!("Couldn't clear the persistent {OVERLAY_ENV}: {e:?}"),
+        }
+    }
     if cfg!(target_os = "linux") {
-        let _ = set_persistent_env(None);
         let _ = Command::new("systemctl").args(["--user", "unset-environment", OVERLAY_ENV]).status();
         let exe = settings.savage_wind.executable.clone();
-        let _ = crate::steam::update_shortcuts(OVERLAY_ENV, None, |path| {
+        match crate::steam::update_shortcuts(OVERLAY_ENV, None, |path| {
             is_savage_wind_exe(path) || exe.as_deref().is_some_and(|e| same_file(e, path))
-        });
-    }
-    if let Some(dir) = game_dir(settings) {
-        let dll = dir.join(LOADER_DLL);
-        if dll.exists() && is_our_loader(&dll) {
-            fs::remove_file(&dll)?;
+        }) {
+            Ok(0) => (),
+            Ok(n) => done.push(format!("removed {OVERLAY_ENV} from {n} Steam shortcut(s)")),
+            Err(e) => log::warn!("Couldn't check the Steam shortcuts: {e:?}"),
         }
     }
-    let config = loader_config_path();
-    if config.exists() {
-        fs::remove_file(config)?;
-    }
-    Ok(())
+    done
 }
 
 fn created_dirs_record(settings: &Settings) -> PathBuf {
@@ -557,12 +468,6 @@ pub fn sync_game_folders(settings: &Settings, overlay: &Path, game: &GameFiles) 
     Ok(needed.len())
 }
 
-pub fn clear_legacy_environment() {
-    if cfg!(windows) && std::env::var_os(OVERLAY_ENV).is_some() {
-        let _ = set_persistent_env(None);
-    }
-}
-
 pub fn launch_command(settings: &Settings) -> Result<Command> {
     let config = &settings.savage_wind;
     let exe = config
@@ -606,44 +511,48 @@ pub fn launch(settings: &Settings) -> Result<Child> {
     command.spawn().context("Failed to start Savage Wind")
 }
 
-pub fn set_persistent_env(value: Option<&Path>) -> Result<()> {
+/// Whether SWMM's persistent SAVAGEWIND_ROMFS_OVERLAY is still set for the user (Windows: HKCU\Environment;
+/// elsewhere: its environment.d file).
+fn legacy_env_present() -> bool {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let status = match value {
-            Some(path) => Command::new("setx")
-                .arg(OVERLAY_ENV)
-                .arg(path)
-                .creation_flags(CREATE_NO_WINDOW)
-                .status(),
-            None => Command::new("reg")
-                .args(["delete", "HKCU\\Environment", "/v", OVERLAY_ENV, "/f"])
-                .creation_flags(CREATE_NO_WINDOW)
-                .status(),
-        }
-        .context("Failed to run setx / reg")?;
-        if !status.success() && value.is_some() {
-            anyhow_ext::bail!("setx failed to set {OVERLAY_ENV} ({status})");
-        }
+        Command::new("reg")
+            .args(["query", r"HKCU\Environment", "/v", OVERLAY_ENV])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        dirs2::config_dir()
+            .map(|d| d.join("environment.d").join("60-savagewind-overlay.conf").exists())
+            .unwrap_or(false)
+    }
+}
+
+fn clear_persistent_env() -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        Command::new("reg")
+            .args(["delete", r"HKCU\Environment", "/v", OVERLAY_ENV, "/f"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()
+            .context("Failed to run reg")?;
         Ok(())
     }
     #[cfg(not(windows))]
     {
-        let dir = dirs2::config_dir()
+        let file = dirs2::config_dir()
             .context("No config folder")?
-            .join("environment.d");
-        let file = dir.join("60-savagewind-overlay.conf");
-        match value {
-            Some(path) => {
-                fs::create_dir_all(&dir)?;
-                fs::write(&file, format!("{}=\"{}\"\n", OVERLAY_ENV, path.display()))?;
-            }
-            None => {
-                if file.exists() {
-                    fs::remove_file(&file)?;
-                }
-            }
+            .join("environment.d")
+            .join("60-savagewind-overlay.conf");
+        if file.exists() {
+            fs::remove_file(&file)?;
         }
         Ok(())
     }

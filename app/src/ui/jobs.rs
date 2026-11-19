@@ -189,17 +189,16 @@ pub fn send_message(message: Message) {
     }
 }
 
-pub fn sync_loader(settings: &swmm_core::settings::Settings) {
-    match swmm_core::savage_wind::sync_loader(settings) {
-        Ok(msg) => log::info!("{msg}"),
-        Err(e) => log::warn!("Loader: {e:?}"),
+/// Undoes what SWMM's loader left in the game's folder, the user's environment and Steam (savage_wind.rs).
+pub fn cleanup_legacy(settings: &swmm_core::settings::Settings) {
+    for done in swmm_core::savage_wind::cleanup_legacy(settings) {
+        log::info!("SWMM leftovers: {done}");
     }
 }
 
 pub fn after_deploy(core: &Manager) {
     use swmm_core::savage_wind;
     let settings = core.settings();
-    sync_loader(&settings);
     let Some(overlay) = savage_wind::overlay_dir(&settings) else {
         return;
     };

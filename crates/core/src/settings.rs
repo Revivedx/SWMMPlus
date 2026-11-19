@@ -227,7 +227,6 @@ fn flatten_switch_folder(storage: &Path) {
     let to = format!("{}{sep}", storage.display());
     let config = Settings::config_dir();
     replace_in_file(&config.join("settings.yml"), &from, &to);
-    replace_in_file(&config.join("loader.ini"), &from, &to);
     replace_in_file(&storage.join("pending.yml"), &from, &to);
     if let Ok(entries) = std::fs::read_dir(storage.join("profiles")) {
         for entry in entries.flatten() {
@@ -277,10 +276,6 @@ fn default_storage() -> PathBuf {
 pub struct SavageWindSettings {
     pub executable: Option<PathBuf>,
     pub browse_gamebanana: bool,
-    pub cemuhook: bool,
-    pub cemuhook_server: std::string::String,
-    pub cemuhook_prefer: bool,
-    pub camera_sensitivity: u32,
 }
 
 impl Default for SavageWindSettings {
@@ -288,10 +283,6 @@ impl Default for SavageWindSettings {
         Self {
             executable: None,
             browse_gamebanana: true,
-            cemuhook: true,
-            cemuhook_server: "127.0.0.1:26760".into(),
-            cemuhook_prefer: false,
-            camera_sensitivity: 100,
         }
     }
 }

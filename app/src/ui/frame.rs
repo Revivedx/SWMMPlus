@@ -99,7 +99,6 @@ impl GameStatus {
 }
 
 pub fn auto_configure_on_start(core: &Manager) {
-    savage_wind::clear_legacy_environment();
     let result = {
         let mut settings = core.settings_mut();
         match savage_wind::auto_configure(&mut settings) {
@@ -123,7 +122,7 @@ pub fn auto_configure_on_start(core: &Manager) {
         Ok(false) => (),
         Err(e) => log::error!("Failed to save the Savage Wind settings: {e:?}"),
     }
-    super::jobs::sync_loader(&core.settings());
+    super::jobs::cleanup_legacy(&core.settings());
 }
 
 static LOGO: LazyLock<RetainedImage> = LazyLock::new(|| {

@@ -16,8 +16,7 @@ if errorlevel 1 (
 )
 if not exist dist mkdir dist
 copy /y "target\release\swmm.exe" "dist\swmm.exe" >nul
-copy /y "target\release\swmm_loader.dll" "dist\swmm.dll" >nul
-powershell -NoProfile -Command "Compress-Archive -Force -Path 'dist\swmm.exe','dist\swmm.dll','LICENSE' -DestinationPath 'dist\swmm-x86_64-windows.zip'"
+powershell -NoProfile -Command "Compress-Archive -Force -Path 'dist\swmm.exe','LICENSE' -DestinationPath 'dist\swmm-x86_64-windows.zip'"
 where wix >nul 2>nul
 if errorlevel 1 (
     echo.
@@ -38,7 +37,7 @@ if errorlevel 1 (
 )
 echo.
 echo Done. Files in %~dp0dist:
-echo   swmm.exe and swmm.dll
+echo   swmm.exe
 echo   swmm-x86_64-windows.zip
 echo   swmm-x86_64-windows.msi
 pause

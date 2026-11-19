@@ -505,7 +505,6 @@ impl App {
                             if let Some(dump) = self.core.settings().dump() {
                                 dump.clear_cache()
                             }
-                            jobs::sync_loader(&self.core.settings());
                             self.game_status = frame::GameStatus::check(&self.core);
                             if sw_paths_changed {
                                 self.do_update(Message::SwAutoDetect);

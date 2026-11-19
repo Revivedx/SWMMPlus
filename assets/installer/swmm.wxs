@@ -12,7 +12,6 @@
       <Directory Id="INSTALLFOLDER" Name="SWMM">
         <Component Id="App">
           <File Id="SwmmExe" Source="$(var.Bin)\swmm.exe" KeyPath="yes" />
-          <File Id="SwmmDll" Name="swmm.dll" Source="$(var.Bin)\swmm_loader.dll" />
         </Component>
       </Directory>
     </StandardDirectory>

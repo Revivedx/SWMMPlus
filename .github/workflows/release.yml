@@ -30,8 +30,7 @@ jobs:
         run: |
           $version = "$env:TAG".TrimStart("v")
           New-Item -ItemType Directory -Force -Path out | Out-Null
-          Copy-Item target/release/swmm_loader.dll target/release/swmm.dll
-          Compress-Archive -Path target/release/swmm.exe, target/release/swmm.dll, LICENSE -DestinationPath "out/swmm-x86_64-windows.zip"
+          Compress-Archive -Path target/release/swmm.exe, LICENSE -DestinationPath "out/swmm-x86_64-windows.zip"
           dotnet tool install --global wix --version 5.0.2
           wix extension add -g WixToolset.UI.wixext/5.0.2
           wix build assets/installer/swmm.wxs -ext WixToolset.UI.wixext -pdbtype none -arch x64 -d Version=$version -d Bin=target/release -d Assets=assets -o "out/swmm-x86_64-windows.msi"
