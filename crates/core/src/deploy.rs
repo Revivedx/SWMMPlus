@@ -510,9 +510,33 @@ impl Manager {
             .without_version_files();
         log::info!("Applying changes");
         let rstb_updates = unpacker.unpack()?;
-        let game_romfs = crate::savage_wind::current_game_files(&settings)
-            .ok()
-            .map(|game| game.romfs);
+        let game = crate::savage_wind::current_game_files(&settings).ok();
+        if let Some(game) = game.as_ref() {
+            // What the mods don't change goes back to the game's own bytes (stock.rs). A pack written again there
+            // may be a little bigger than the one the size estimates were made from.
+            let (content, aoc) = platform_prefixes(settings.current_mode.into());
+            let restored =
+                crate::stock::restore_merged(&out_dir.join(content), &out_dir.join(aoc), game, None);
+            for (file, dlc, size, game_size) in restored.rewritten {
+                let name = crate::savage_wind::rstb_name(file.strip_prefix("Aoc/0010/").unwrap_or(&file));
+                let canon = if dlc { format!("Aoc/0010/{name}") } else { name };
+                let Some(estimate) = rstb::calc::calc_from_size_and_name(size, &canon, endian.into()) else {
+                    continue;
+                };
+                let key: String = canon.as_str().into();
+                rstb_updates
+                    .entry(key.clone())
+                    .and_modify(|v| *v = (*v).max(Some(estimate)))
+                    .or_insert(Some(estimate));
+                let size = size.min(u32::MAX as usize) as u32;
+                let game_size = game_size.min(u32::MAX as usize) as u32;
+                uk_mod::unpack::RSTB_SIZE_HINTS
+                    .entry(key)
+                    .and_modify(|v| v.0 = v.0.max(size))
+                    .or_insert((size, game_size));
+            }
+        }
+        let game_romfs = game.map(|game| game.romfs);
         self.apply_rstb(
             &out_dir,
             settings.current_mode,

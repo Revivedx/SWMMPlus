@@ -560,7 +560,7 @@ fn clear_persistent_env() -> Result<()> {
 
 const RSTB_PATH: &str = "System/Resource/ResourceSizeTable.product.srsizetable";
 
-fn rstb_name(path: &str) -> String {
+pub(crate) fn rstb_name(path: &str) -> String {
     match path.rfind('.') {
         Some(dot)
             if path[dot + 1..].starts_with('s')

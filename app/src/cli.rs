@@ -33,6 +33,7 @@ xflags::xflags! {
         }
         cmd remerge {}
         cmd deploy {}
+        cmd status {}
     }
 }
 #[derive(Debug)]
@@ -51,6 +52,7 @@ pub enum SwmmCmd {
     Package(Package),
     Remerge(Remerge),
     Deploy(Deploy),
+    Status(Status),
 }
 
 #[derive(Debug)]
@@ -77,6 +79,9 @@ pub struct Remerge;
 
 #[derive(Debug)]
 pub struct Deploy;
+
+#[derive(Debug)]
+pub struct Status;
 
 impl Swmm {
     #[allow(dead_code)]
@@ -112,43 +117,78 @@ pub struct Runner {
 
 impl Runner {
     pub fn new(cli: Swmm) -> Self {
-        Self {
-            core: core::Manager::init().unwrap(),
-            cli,
-        }
-    }
-
-    fn check_mod(&self, path: &Path) -> Result<Option<PathBuf>> {
-        let (mod_, path) = match ModReader::open(path, vec![]) {
-            Ok(mod_) => (mod_, path.to_path_buf()),
-            Err(e) => {
-                match swmm_core::mods::convert_gfx(&self.core, path, None) {
-                    Ok(path) => {
-                        log::info!("Opening mod at {}", path.display());
-                        (
-                            ModReader::open(&path, vec![])
-                                .context("Failed to open converted mod")?,
-                            path,
-                        )
-                    }
-                    Err(e2) => {
-                        anyhow_ext::bail!(
-                            "Could not open mod. Error when attempting to open as a mod package: {}. \
-                             Error when attempting to open as legacy mod: {}.",
-                            e,
-                            e2
-                        )
-                    }
+        let core = core::Manager::init().unwrap();
+        // The same automatic setup the window does on start: find Savage Wind and the player's game files.
+        let saved = {
+            let mut settings = core.settings_mut();
+            match swmm_core::savage_wind::auto_configure(&mut settings) {
+                Ok(done) if done.changed() => settings.save().map(|_| true),
+                Ok(_) => Ok(false),
+                Err(e) => {
+                    eprintln!("Savage Wind isn't set up yet: {e:?}");
+                    Ok(false)
                 }
             }
         };
-        if !mod_.meta.options.is_empty() {
-            anyhow_ext::bail!(
-                "This mod contains configuration options and should be installed via the GUI."
-            );
+        match saved {
+            Ok(true) => {
+                if let Err(e) = core.reload() {
+                    eprintln!("Failed to reload after setting up Savage Wind: {e:?}");
+                }
+            }
+            Ok(false) => (),
+            Err(e) => eprintln!("Failed to save the Savage Wind settings: {e:?}"),
         }
+        Self { core, cli }
+    }
+
+    // Anything the window accepts: a packaged mod, a BNP, an archive or a folder of game files (import.rs).
+    fn check_mod(&self, path: &Path) -> Result<Option<PathBuf>> {
+        let (mod_, path) = match ModReader::open_peek(path, vec![]) {
+            Ok(mod_) => (mod_, path.to_path_buf()),
+            Err(e) => {
+                let converted = swmm_core::import::convert_any(&self.core, path, None)
+                    .with_context(|| format!("Could not open {} as a mod ({e})", path.display()))?;
+                (
+                    ModReader::open_peek(&converted, vec![]).context("Failed to open converted mod")?,
+                    converted,
+                )
+            }
+        };
         println!("Installing {}...", mod_.meta.name);
         Ok(Some(path))
+    }
+
+    fn status(&self) -> Result<()> {
+        let settings = self.core.settings();
+        let game = swmm_core::savage_wind::current_game_files(&settings).ok();
+        let mods = self
+            .core
+            .mod_manager()
+            .mods()
+            .enumerate()
+            .map(|(index, m)| {
+                serde_json::json!({
+                    "index": index,
+                    "name": m.meta.name.as_str(),
+                    "version": m.meta.version.as_str(),
+                    "author": m.meta.author.as_str(),
+                    "enabled": m.enabled,
+                    "options": m.enabled_options.iter().map(|o| o.name.as_str()).collect::<Vec<_>>(),
+                })
+            })
+            .collect::<Vec<_>>();
+        let status = serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "executable": settings.savage_wind.executable,
+            "game_version": game.as_ref().and_then(|g| g.version.clone()),
+            "dlc_version": game.as_ref().and_then(|g| g.aoc_version.clone()),
+            "overlay": swmm_core::savage_wind::overlay_dir(&settings),
+            "pending_deploy": self.core.deploy_manager().pending(),
+            "mods": mods,
+        });
+        println!("{}", serde_json::to_string_pretty(&status)?);
+        Ok(())
     }
 
     fn deploy(&self) -> Result<()> {
@@ -172,8 +212,25 @@ impl Runner {
             SwmmCmd::Install(Install { path, profile }) => {
                 if let Some(path) = self.check_mod(path)? {
                     let mods = self.core.mod_manager();
-                    let mod_ = mods.add(&path, profile.as_ref())?;
+                    let mut mod_ = mods.add(&path, profile.as_ref())?;
                     mods.set_enabled(mod_.as_map_id(), true, profile.as_ref())?;
+                    // No window to ask in: a mod with options gets the ones its author marked as default.
+                    mod_.enable_default_options();
+                    // A group that needs a choice and names no default gets its first option.
+                    for group in &mod_.meta.options {
+                        if let uk_mod::OptionGroup::Exclusive(group) = group {
+                            let chosen = group.options.iter().any(|o| mod_.enabled_options.contains(o));
+                            if group.required && !chosen {
+                                mod_.enabled_options.extend(group.options.first().cloned());
+                            }
+                        }
+                    }
+                    if !mod_.enabled_options.is_empty() {
+                        for option in &mod_.enabled_options {
+                            println!("Option: {}", option.name);
+                        }
+                        mods.set_enabled_options(mod_.as_map_id(), mod_.enabled_options.clone())?;
+                    }
                     mods.save()?;
                     println!("Applying mod to load order...");
                     let deployer = self.core.deploy_manager();
@@ -244,6 +301,7 @@ impl Runner {
                 println!("Done!");
             }
             SwmmCmd::Deploy(_) => self.deploy()?,
+            SwmmCmd::Status(_) => self.status()?,
         };
         Ok(())
     }

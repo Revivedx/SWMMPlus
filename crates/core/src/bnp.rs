@@ -635,7 +635,17 @@ pub fn unpack_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> {
             .context("Failed to copy files to temp folder")?;
     } else {
         log::info!("Extracting BNP…");
-        extract_7z(path, &tempdir).context("Failed to extract BNP")?;
+        // A BNP is a 7z archive, but some are ZIPs with the same extension.
+        let mut magic = [0u8; 2];
+        let _ = std::io::Read::read(&mut fs::File::open(path)?, &mut magic);
+        if &magic == b"PK" {
+            zip::ZipArchive::new(std::io::BufReader::new(fs::File::open(path)?))
+                .context("Failed to open BNP")?
+                .extract(tempdir.as_path())
+                .context("Failed to extract BNP")?;
+        } else {
+            extract_7z(path, &tempdir).context("Failed to extract BNP")?;
+        }
     }
     if tempdir.join("rules.txt").exists() && !tempdir.join("info.json").exists() {
         old::Bnp2xConverter::new(&tempdir)
