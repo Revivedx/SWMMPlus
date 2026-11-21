@@ -155,6 +155,9 @@ impl Runner {
                 )
             }
         };
+        for line in swmm_core::wiiu::take_notes() {
+            println!("{line}");
+        }
         println!("Installing {}...", mod_.meta.name);
         Ok(Some(path))
     }

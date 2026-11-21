@@ -652,7 +652,14 @@ pub fn unpack_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> {
             .convert()
             .context("Failed to upgrade 2.x BNP")?;
     }
-    let (content, aoc) = uk_content::platform_prefixes(core.settings().current_mode.into());
+    // A Wii U BNP keeps its files in `content` and `aoc`; what its logs rebuild has to land there too, or the
+    // packager, which goes by those folders, never sees it.
+    let wii_u = crate::wiiu::is_wii_u_tree(&tempdir);
+    let (content, aoc) = uk_content::platform_prefixes(if wii_u {
+        uk_content::prelude::Endian::Big
+    } else {
+        core.settings().current_mode.into()
+    });
     log::info!("Processing BNP logs…");
     let converter = BnpConverter {
         platform: core.settings().current_mode,
@@ -690,11 +697,15 @@ pub fn convert_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> 
         )
     })?;
     let tempfile = std::env::temp_dir();
-    let meta = if let Some(info_path) = tempdir.join("info.json").exists_then() {
+    let mut meta = if let Some(info_path) = tempdir.join("info.json").exists_then() {
         ModPacker::parse_info(info_path)?
     } else {
         ModPacker::parse_rules(tempdir.join("rules.txt")).context("Failed to parse BNP metadata")?
     };
+    if crate::wiiu::is_wii_u_tree(&tempdir) {
+        crate::wiiu::convert_tree(&tempdir).context("Failed to convert the Wii U files")?;
+        meta.platform = uk_mod::ModPlatform::Specific(uk_content::prelude::Endian::Little);
+    }
     let name = meta.name.clone();
     let new_mod = ModPacker::new(tempdir, tempfile.as_path(), Some(meta), vec![
         core.settings()
@@ -707,6 +718,7 @@ pub fn convert_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> 
 
 #[cfg(test)]
 #[test]
+#[ignore = "needs a BNP in the Downloads folder"]
 #[allow(clippy::unwrap_used)]
 fn test_convert() {
     let path = dirs2::download_dir()

@@ -145,6 +145,9 @@ fn convert_inner(
         );
     }
     log::info!("Staged {placed} game files from {}", dir.display());
+    if crate::wiiu::is_wii_u_tree(&staged) {
+        crate::wiiu::convert_tree(&staged).context("Failed to convert the Wii U files")?;
+    }
 
     let meta = match meta {
         Some(meta) => meta,
@@ -320,10 +323,22 @@ fn stage_romfs(
     files: &[PathBuf],
     staged: &Path,
 ) -> Result<Staged> {
-    let (content, aoc) = platform_prefixes(core.settings().current_mode.into());
     let game = {
         let settings = core.settings();
         crate::savage_wind::current_game_files(&settings).ok()
+    };
+    // A Wii U mod keeps its files in `content` and `aoc/0010`. It is staged under those names, which is how the
+    // packager knows what it is, and converted afterwards (wiiu.rs).
+    let stock_tops = stock_top_names(game.as_ref());
+    let wii_u = dirs.iter().any(|d| {
+        let name = name_of(d).to_lowercase();
+        (name == "content" || name == "0010") && top_names(d).keys().any(|k| stock_tops.contains_key(k))
+    });
+    let (content, aoc) = if wii_u {
+        log::info!("This is a Wii U mod");
+        platform_prefixes(Endian::Big)
+    } else {
+        platform_prefixes(core.settings().current_mode.into())
     };
     let result = stage_layout(content, aoc, game.as_ref(), root, dirs, files, staged)?;
     if let Some(game) = game.as_ref() {
@@ -390,7 +405,7 @@ fn variant_key(root: &Path, dir: &Path, skip: &[&str]) -> (String, bool, Vec<Str
         .into_iter()
         .filter(|c| {
             let lower = c.to_lowercase();
-            !skip.contains(&lower.as_str()) && !LAYOUT_NAMES.contains(&lower.as_str())
+            !skip.contains(&lower.as_str()) && !LAYOUT_NAMES.contains(&lower.as_str()) && lower != "0010"
         })
         .collect();
     (parts.join("/"), dlc, parts)
@@ -421,7 +436,11 @@ fn stage_layout(
         let is_bare_title = (name == content_id || name == aoc_id)
             && !top_names(d).contains_key("romfs")
             && has_game_dirs(d.as_path());
-        if is_romfs || is_bare_title {
+        // The Wii U's DLC folder: aoc/0010.
+        let is_wii_u_dlc = name == "0010"
+            && d.parent().map(|p| name_of(p).to_lowercase()) == Some(aoc_id.clone())
+            && has_game_dirs(d.as_path());
+        if is_romfs || is_bare_title || is_wii_u_dlc {
             romfs_roots.push(d.clone());
         }
     }
@@ -665,8 +684,6 @@ fn unsupported_reason(dirs: &[PathBuf], files: &[PathBuf]) -> Option<&'static st
         Some("It only patches the game's code (exefs, IPS or pchtxt). Savage Wind runs its own recompiled code, so these patches can't apply. Look for a Savage Wind version of this mod or a setting in Savage Wind itself.")
     } else if has_dir("cheats") {
         Some("It only contains cheat codes, which Savage Wind can't use.")
-    } else if has_dir("content") || has_dir("aoc") {
-        Some("It's a Wii U mod (content/aoc folders). Wii U files don't work on Switch; look for the Switch version.")
     } else if has_ext(&["tkcl"]) {
         Some("It's a Tears of the Kingdom mod (.tkcl), which doesn't work with Breath of the Wild.")
     } else {

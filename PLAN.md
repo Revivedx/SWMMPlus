@@ -27,11 +27,25 @@ or do; bugs caused by mods are closed.
 
 ## Phase 2: Wii U mods
 
-1. Data files that only differ in byte order (BYML, AAMP, SARC, MSBT, event flows): converted to the Switch's.
-2. Textures (`.bflim`, textures in `.bfres`): GX2 tiling to the Switch's, into the game's `.bntx`.
-3. Fonts (`.bffnt`): byte order and glyph sheets.
+A Wii U mod (a BNP, or `content` and `aoc` folders) installs like any other. Its files are converted when it is
+installed, and what can't be converted is left out, so the game keeps its own, and listed for the player.
 
-Wii U models and Cemu graphic packs (shaders, code patches) are not convertible.
+Done:
+
+1. Data files that only differ in byte order (BYML, AAMP, SARC, texts): the merger reads either.
+2. Layout images (`.bflim`): out of the Wii U's tiling, into the Switch's, into the layout archive's `.bntx`.
+3. Layouts (`.bflyt`) and layout animations (`.bflan`): version 5.2 big endian to version 8.0 little endian.
+4. Fonts (`.bffnt`): version 3 to 4.1, glyph sheets into the texture archive inside the font.
+
+To do:
+
+1. Layouts with a parts pane that overrides a text box or a pane's placement, projected textures, animated user
+   data: refused for now, the game's own layout stays.
+2. A whole Wii U layout archive replaces the Switch's layouts with the Wii U's, changed by the mod or not: tell which
+   ones the mod changes and convert only those.
+3. Textures in models (`.bfres`), sounds (`.bfstm`, `.bars`).
+
+Wii U models, physics and Cemu graphic packs (shaders, code patches) are not convertible.
 
 ## Savage Wind side
 

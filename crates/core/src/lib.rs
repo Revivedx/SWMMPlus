@@ -10,4 +10,5 @@ pub mod source;
 pub mod steam;
 pub mod stock;
 pub mod util;
+pub mod wiiu;
 pub mod savage_wind;
