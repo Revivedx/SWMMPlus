@@ -49,6 +49,39 @@ pub fn flim_kind(format: u8) -> Option<Kind> {
     }
 }
 
+/// The format of a Wii U model texture (a GX2 surface format) and its channel order (one byte per output
+/// channel: 0 red, 1 green, 2 blue, 3 alpha, 4 zero, 5 one).
+pub fn gx2_kind(format: u32, channels: [u8; 4]) -> Option<Kind> {
+    let (nx_format, block, bytes) = match format {
+        0x001 => (0x0201, 1, 1),
+        0x007 => (0x0901, 1, 2),
+        0x01A => (0x0B01, 1, 4),
+        0x41A => (0x0B06, 1, 4),
+        0x031 => (0x1A01, 4, 8),
+        0x431 => (0x1A06, 4, 8),
+        0x032 => (0x1B01, 4, 16),
+        0x432 => (0x1B06, 4, 16),
+        0x033 => (0x1C01, 4, 16),
+        0x433 => (0x1C06, 4, 16),
+        0x034 => (0x1D01, 4, 8),
+        0x234 => (0x1D02, 4, 8),
+        0x035 => (0x1E01, 4, 16),
+        0x235 => (0x1E02, 4, 16),
+        _ => return None,
+    };
+    let mut selector = 0u32;
+    for (i, channel) in channels.into_iter().enumerate() {
+        let nx = match channel {
+            0..=3 => channel as u32 + 2,
+            4 => 0,
+            5 => 1,
+            _ => return None,
+        };
+        selector |= nx << (8 * i);
+    }
+    Some(Kind { nx_format, channels: selector, block, bytes })
+}
+
 /// BC4 with the alpha in its one channel: what both consoles' fonts use for their glyph sheets.
 pub const FONT_SHEET: Kind = Kind { nx_format: 0x1D01, channels: ALPHA_ONLY, block: 4, bytes: 8 };
 
@@ -180,6 +213,8 @@ pub struct Texture {
     pub height: u32,
     pub kind: Kind,
     pub layers: Vec<Vec<u8>>,
+    /// The smaller levels of a one-layer texture, each half the one before.
+    pub mips: Vec<Vec<u8>>,
     /// The Switch's fonts mark their sheets as an array even with one layer.
     pub array: bool,
 }
@@ -214,6 +249,7 @@ pub fn read_bflim(name: &str, data: &[u8]) -> Result<Texture> {
         height,
         kind,
         layers: vec![linear],
+        mips: Vec::new(),
         array: false,
     })
 }
@@ -255,6 +291,9 @@ pub fn build_bntx(file_name: &str, textures: &[Texture]) -> Result<Vec<u8>> {
     for (i, texture) in textures.iter().enumerate() {
         let kind = texture.kind;
         let (width, height) = (texture.width.div_ceil(kind.block), texture.height.div_ceil(kind.block));
+        if !texture.mips.is_empty() && texture.layers.len() != 1 {
+            bail!("{}: smaller levels on a texture with {} layers", texture.name, texture.layers.len());
+        }
         let mut data = Vec::new();
         for layer in &texture.layers {
             if layer.len() != (width * height * kind.bytes) as usize {
@@ -262,11 +301,27 @@ pub fn build_bntx(file_name: &str, textures: &[Texture]) -> Result<Vec<u8>> {
             }
             data.extend_from_slice(&tegra_swizzle(layer, width, height, kind.bytes));
         }
+        // Each smaller level follows the one before, in the block height its own size calls for.
+        let mut level_starts = vec![0usize];
+        for (i, level) in texture.mips.iter().enumerate() {
+            let shift = i as u32 + 1;
+            let (w, h) = (
+                (texture.width >> shift).max(1).div_ceil(kind.block),
+                (texture.height >> shift).max(1).div_ceil(kind.block),
+            );
+            if level.len() != (w * h * kind.bytes) as usize {
+                bail!("{}: level {shift} holds {} bytes, not {w}x{h}", texture.name, level.len());
+            }
+            level_starts.push(data.len());
+            data.extend_from_slice(&tegra_swizzle(level, w, h, kind.bytes));
+        }
         let name = string(&mut out, &texture.name);
         let mips = out.len();
-        out.resize(mips + 8, 0);
+        out.resize(mips + 8 * level_starts.len(), 0);
         let pixels = out.len();
-        put64(&mut out, mips, pixels);
+        for (i, start) in level_starts.iter().enumerate() {
+            put64(&mut out, mips + 8 * i, pixels + start);
+        }
         out.extend_from_slice(&data);
         out.resize(out.len().div_ceil(8) * 8, 0);
         let record = out.len();
@@ -276,7 +331,7 @@ pub fn build_bntx(file_name: &str, textures: &[Texture]) -> Result<Vec<u8>> {
         let info = &mut out[record + 0x10..record + 0x60];
         info[0] = 1; // flags
         info[1] = 2; // two-dimensional storage
-        info[6..8].copy_from_slice(&1u16.to_le_bytes()); // one mip level
+        info[6..8].copy_from_slice(&(1 + texture.mips.len() as u16).to_le_bytes()); // levels
         info[8..10].copy_from_slice(&1u16.to_le_bytes()); // one sample
         let fields: [(usize, u32); 11] = [
             (0x0C, kind.nx_format),
@@ -363,6 +418,7 @@ mod tests {
             height: 46,
             kind: flim_kind(0x0E).unwrap(),
             layers: vec![(0..12 * 12 * 16).map(|i| i as u8).collect()],
+            mips: Vec::new(),
             array: false,
         };
         let bntx = build_bntx("__Combined", &[texture]).unwrap();

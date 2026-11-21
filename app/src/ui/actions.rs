@@ -577,6 +577,13 @@ impl App {
                 }
 
                 Message::CloseChangelog => self.changelog = None,
+                Message::Notice(msg) => {
+                    self.toasts.add({
+                        let mut toast = Toast::warning(msg);
+                        toast.set_duration(None).set_closable(true);
+                        toast
+                    });
+                }
                 Message::Toast(msg) => {
                     self.toasts.add({
                         let mut toast = Toast::info(msg);

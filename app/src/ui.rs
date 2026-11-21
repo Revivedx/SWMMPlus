@@ -130,6 +130,8 @@ pub enum Message {
     InstallMod(Mod),
     ModUpdate,
     MoveSelected(usize),
+    /// Something the player should read: stays up until closed.
+    Notice(String),
     NewProfile,
     Noop,
     OpenMod(PathBuf),

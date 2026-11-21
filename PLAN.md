@@ -36,6 +36,11 @@ Done:
 2. Layout images (`.bflim`): out of the Wii U's tiling, into the Switch's, into the layout archive's `.bntx`.
 3. Layouts (`.bflyt`) and layout animations (`.bflan`): version 5.2 big endian to version 8.0 little endian.
 4. Fonts (`.bffnt`): version 3 to 4.1, glyph sheets into the texture archive inside the font.
+5. Texture files (a Wii U model file with nothing but textures: icons `.sbitemico`, and the same shape elsewhere):
+   each texture and its smaller levels out of the Wii U's tiling, into a texture archive inside the Switch's model
+   file. The Switch file and the levels' places match the game's own files byte for byte.
+6. The player is told a mod is a Wii U one, that it was converted on their PC and that it may not work, with what
+   was converted and what was left out (a notice in the window, lines in the command line).
 
 To do:
 
@@ -43,7 +48,10 @@ To do:
    data: refused for now, the game's own layout stays.
 2. A whole Wii U layout archive replaces the Switch's layouts with the Wii U's, changed by the mod or not: tell which
    ones the mod changes and convert only those.
-3. Textures in models (`.bfres`), sounds (`.bfstm`, `.bars`).
+3. A model's textures: the Wii U splits them in two files (`.Tex1.sbfres` with the texture, `.Tex2.sbfres` with
+   its smaller levels) and the Switch has one (`.Tex.sbfres`). Needs a Wii U texture mod to test with. Array, cube
+   and 16-bit packed textures are refused.
+4. Sounds (`.bfstm`, `.bars`).
 
 Wii U models, physics and Cemu graphic packs (shaders, code patches) are not convertible.
 

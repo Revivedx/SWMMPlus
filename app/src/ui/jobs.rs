@@ -92,6 +92,19 @@ pub fn open_downloaded_mod(
 }
 
 fn read_mod(core: &Manager, path: &Path, meta: Option<Meta>) -> Result<Mod> {
+    let mod_ = read_any_mod(core, path, meta);
+    // A Wii U mod was converted on the way: the player is told, with what was converted and what was left out.
+    let notes = swmm_core::wiiu::take_notes();
+    if mod_.is_ok() && !notes.is_empty() {
+        send_message(Message::Notice(format!("{}
+
+{}", "WiiU_Notice".localize(), notes.join("
+"))));
+    }
+    mod_
+}
+
+fn read_any_mod(core: &Manager, path: &Path, meta: Option<Meta>) -> Result<Mod> {
     log::info!("Opening mod at {}", path.display());
     if is_probably_a_bnp(path) {
         let mod_ = convert_bnp(core, path).context("Failed to convert the BNP mod")?;

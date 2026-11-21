@@ -97,6 +97,7 @@ pub fn convert_bffnt(data: &[u8]) -> Result<Vec<u8>> {
         height,
         kind,
         layers,
+        mips: Vec::new(),
         array: true,
     }])?;
 

@@ -1,12 +1,13 @@
 //! Wii U mods on the Switch game.
 //!
 //! Most of a mod's data files only differ in byte order, and the merger reads either. What it can't read across are
-//! the files it treats as opaque: layout images, layouts, layout animations and fonts. Those are converted here,
-//! in the mod's own files, before the mod is packaged. What can't be converted (models, sounds, physics) is left
-//! out, so the game keeps its own, and noted for the player.
+//! the files it treats as opaque: layout images, layouts, layout animations, fonts and texture files. Those are
+//! converted here, in the mod's own files, before the mod is packaged. What can't be converted (models, sounds,
+//! physics) is left out, so the game keeps its own, and noted for the player.
 
 pub mod font;
 pub mod layout;
+pub mod model;
 pub mod tex;
 
 use std::path::Path;
@@ -26,13 +27,15 @@ pub struct Report {
     pub layouts: usize,
     pub animations: usize,
     pub fonts: usize,
+    /// Textures in texture files (icons, model textures).
+    pub model_textures: usize,
     /// Files left out of the mod and why.
     pub left_out: Vec<(String, String)>,
 }
 
 impl Report {
     pub fn converted(&self) -> usize {
-        self.textures + self.layouts + self.animations + self.fonts
+        self.textures + self.layouts + self.animations + self.fonts + self.model_textures
     }
 
     /// A few lines a player can read.
@@ -40,8 +43,8 @@ impl Report {
         let mut lines = Vec::new();
         if self.converted() > 0 {
             lines.push(format!(
-                "Converted from Wii U: {} images, {} layouts, {} layout animations, {} fonts",
-                self.textures, self.layouts, self.animations, self.fonts
+                "Converted from Wii U: {} images, {} layouts, {} layout animations, {} fonts, {} textures",
+                self.textures, self.layouts, self.animations, self.fonts, self.model_textures
             ));
         }
         if !self.left_out.is_empty() {
@@ -97,9 +100,16 @@ fn leaf(name: &str, data: &[u8], report: &mut Report) -> Outcome {
             converted(layout::convert_bflan(data), "a layout animation", &mut report.animations)
         }
         b"FFNT" if wii_u_bom(data, 4) => converted(font::convert_bffnt(data), "a font", &mut report.fonts),
+        b"FRES" if model::only_textures(data) => match model::convert_texture_file(data) {
+            Ok((data, count)) => {
+                report.model_textures += count;
+                Outcome::Replace(data)
+            }
+            Err(e) => Outcome::LeaveOut(format!("a texture file that couldn't be converted: {e}")),
+        },
         // The Switch's model files start "FRES" and four spaces.
         b"FRES" if data.get(4..8) != Some(b"    ") => {
-            Outcome::LeaveOut("Wii U models and model textures, which have another format on Switch".into())
+            Outcome::LeaveOut("Wii U models and animations, which have another format on Switch".into())
         }
         b"FSTM" | b"FWAV" | b"FSTP" | b"FSAR" | b"FWAR" | b"FGRP" if wii_u_bom(data, 4) => {
             Outcome::LeaveOut("Wii U sounds".into())

@@ -155,7 +155,11 @@ impl Runner {
                 )
             }
         };
-        for line in swmm_core::wiiu::take_notes() {
+        let notes = swmm_core::wiiu::take_notes();
+        if !notes.is_empty() {
+            println!("This is a Wii U mod. SWMM+ converted it on this PC for the Switch game. It may work, work in part or not work.");
+        }
+        for line in notes {
             println!("{line}");
         }
         println!("Installing {}...", mod_.meta.name);
