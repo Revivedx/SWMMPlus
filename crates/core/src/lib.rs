@@ -8,6 +8,7 @@ pub mod mods;
 pub mod settings;
 pub mod source;
 pub mod steam;
+pub mod rebase;
 pub mod stock;
 pub mod util;
 pub mod wiiu;

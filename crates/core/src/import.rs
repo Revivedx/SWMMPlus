@@ -153,6 +153,15 @@ fn convert_inner(
         crate::wiiu::convert_tree(&staged, &game.map(|g| g.folders()).unwrap_or_default())
             .context("Failed to convert the Wii U files")?;
     }
+    // Whole game files from another version of the game: their lists of actors and flags go on this one's.
+    let game = {
+        let settings = core.settings();
+        crate::savage_wind::current_game_files(&settings).ok()
+    };
+    if let Some(game) = game {
+        crate::rebase::rebase_tree(&staged, &game.folders())
+            .context("Failed to bring the mod's files to this version of the game")?;
+    }
 
     let meta = match meta {
         Some(meta) => meta,

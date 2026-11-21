@@ -38,6 +38,7 @@ swmm-i18n = { path = "../i18n" }
 uk-mod = { workspace = true }
 uk-reader = { workspace = true }
 uk-util = { workspace = true }
+botw-utils = { git = "https://github.com/GingerAvalanche/botw-utils-rust.git" }
 
 [target.'cfg(windows)'.dependencies]
 junction = { git = "https://github.com/NiceneNerd/junction" }

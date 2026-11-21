@@ -58,6 +58,29 @@ To do:
 
 Wii U models, physics and Cemu graphic packs (shaders, code patches) are not convertible.
 
+## Phase 3: mods made for other versions of the game
+
+Mods are made on version 1.6.0. Savage Wind runs 1.9.0, which differs from it in some 90 files and has 19 new ones
+(new actors and saved flags, two more languages, layouts, fonts).
+
+Done:
+
+1. BNPs and packaged mods carry their changes, not whole files: they go on 1.9.0 as they are.
+2. A mod's unchanged copies of 1.6.0 files are left out by the packager, which knows them by their hashes.
+3. A mod that comes as whole game files brings 1.6.0's table of actors and its saved flags. Installed as it was,
+   it took the ten actors 1.9.0 added out of the game, gave 2375 actors their old memory sizes and took out 14
+   saved flags. Before packaging, those files now get what only the player's game has, and the game's larger
+   memory sizes (`rebase.rs`). The same mod installed from its whole files and from its BNP now gives the same
+   game files, but for one 1.6.0 flag the newer game dropped.
+
+To do:
+
+1. Texts: a mod's start-up archive for a language brings 1.6.0's texts, and the few 1.9.0 reworded go back to
+   1.6.0's wording (some fifteen in English, most in the credits). Telling them from the mod's own changes needs
+   to know 1.6.0's texts; a list of their hashes would do.
+2. Tell the player when a mod was brought to their version, as for Wii U mods.
+3. A mod that really takes an actor or a saved flag out of the game no longer does.
+
 ## Savage Wind side
 
 Configuration > Mods gets an SWMM+ section: Install (a pinned version, SHA-256 checked, like DLSS), Open, Update and
