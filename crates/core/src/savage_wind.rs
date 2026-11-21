@@ -153,6 +153,13 @@ pub struct GameFiles {
 
 impl GameFiles {
     #[inline]
+    /// The folders the game's files are in: the base game's, then the DLC's, newest first.
+    pub fn folders(&self) -> Vec<PathBuf> {
+        let mut folders = vec![self.romfs.clone()];
+        folders.extend(self.all_aoc.iter().rev().cloned());
+        folders
+    }
+
     pub fn is_supported_version(&self) -> bool {
         self.version
             .as_deref()

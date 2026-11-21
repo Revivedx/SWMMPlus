@@ -192,7 +192,18 @@ pub fn tegra_swizzle(linear: &[u8], width: u32, height: u32, bytes: u32) -> Vec<
 
 /// The Switch's storage order back to plain rows (for tests and checks).
 pub fn tegra_unswizzle(data: &[u8], width: u32, height: u32, bytes: u32) -> Option<Vec<u8>> {
-    let block_height = 1 << tegra_block_height_log2(height);
+    tegra_unswizzle_at(data, width, height, bytes, tegra_block_height_log2(height))
+}
+
+/// The same for a texture that says its own block height.
+pub fn tegra_unswizzle_at(
+    data: &[u8],
+    width: u32,
+    height: u32,
+    bytes: u32,
+    block_height_log2: u32,
+) -> Option<Vec<u8>> {
+    let block_height = 1 << block_height_log2.min(4);
     let mut out = vec![0u8; (width * height * bytes) as usize];
     for y in 0..height {
         for x in 0..width {

@@ -703,7 +703,12 @@ pub fn convert_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> 
         ModPacker::parse_rules(tempdir.join("rules.txt")).context("Failed to parse BNP metadata")?
     };
     if crate::wiiu::is_wii_u_tree(&tempdir) {
-        crate::wiiu::convert_tree(&tempdir).context("Failed to convert the Wii U files")?;
+        let game = {
+            let settings = core.settings();
+            crate::savage_wind::current_game_files(&settings).ok()
+        };
+        crate::wiiu::convert_tree(&tempdir, &game.map(|g| g.folders()).unwrap_or_default())
+            .context("Failed to convert the Wii U files")?;
         meta.platform = uk_mod::ModPlatform::Specific(uk_content::prelude::Endian::Little);
     }
     let name = meta.name.clone();

@@ -146,7 +146,12 @@ fn convert_inner(
     }
     log::info!("Staged {placed} game files from {}", dir.display());
     if crate::wiiu::is_wii_u_tree(&staged) {
-        crate::wiiu::convert_tree(&staged).context("Failed to convert the Wii U files")?;
+        let game = {
+            let settings = core.settings();
+            crate::savage_wind::current_game_files(&settings).ok()
+        };
+        crate::wiiu::convert_tree(&staged, &game.map(|g| g.folders()).unwrap_or_default())
+            .context("Failed to convert the Wii U files")?;
     }
 
     let meta = match meta {

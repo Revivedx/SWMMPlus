@@ -7,6 +7,7 @@
 
 pub mod font;
 pub mod layout;
+pub mod mips;
 pub mod model;
 pub mod tex;
 
@@ -78,6 +79,8 @@ enum Outcome {
     Keep,
     Replace(Vec<u8>),
     LeaveOut(String),
+    /// Taken out without a word: the Switch has nothing like it and loses nothing.
+    Drop,
 }
 
 fn wii_u_bom(data: &[u8], at: usize) -> bool {
@@ -85,7 +88,7 @@ fn wii_u_bom(data: &[u8], at: usize) -> bool {
 }
 
 /// One file that isn't an archive.
-fn leaf(name: &str, data: &[u8], report: &mut Report) -> Outcome {
+fn leaf(name: &str, data: &[u8], game: Option<&[u8]>, report: &mut Report) -> Outcome {
     let converted = |result: Result<Vec<u8>>, what: &str, count: &mut usize| match result {
         Ok(data) => {
             *count += 1;
@@ -100,7 +103,8 @@ fn leaf(name: &str, data: &[u8], report: &mut Report) -> Outcome {
             converted(layout::convert_bflan(data), "a layout animation", &mut report.animations)
         }
         b"FFNT" if wii_u_bom(data, 4) => converted(font::convert_bffnt(data), "a font", &mut report.fonts),
-        b"FRES" if model::only_textures(data) => match model::convert_texture_file(data) {
+        b"FRES" if model::is_wii_u(data) && model::is_second_texture_file(name) => Outcome::Drop,
+        b"FRES" if model::only_textures(data) => match model::convert_texture_file(data, game) {
             Ok((data, count)) => {
                 report.model_textures += count;
                 Outcome::Replace(data)
@@ -149,12 +153,24 @@ fn archive(name: &str, data: &[u8], report: &mut Report) -> Option<Vec<u8>> {
                 Err(e) => Outcome::LeaveOut(format!("a layout image that couldn't be converted: {e}")),
             }
         } else {
-            file_outcome(&full, file.data(), report)
+            file_outcome(&full, file.data(), None, report)
         };
         match outcome {
             Outcome::Keep => (),
             Outcome::Replace(data) => {
-                writer.files.insert(member.into(), data);
+                match model::switch_name(member).filter(|_| data_is_switch_model(&data)) {
+                    Some(renamed) => {
+                        writer.files.shift_remove(member);
+                        writer.files.insert(renamed.into(), data);
+                    }
+                    None => {
+                        writer.files.insert(member.into(), data);
+                    }
+                }
+                changed = true;
+            }
+            Outcome::Drop => {
+                writer.files.shift_remove(member);
                 changed = true;
             }
             Outcome::LeaveOut(reason) => {
@@ -183,7 +199,12 @@ fn archive(name: &str, data: &[u8], report: &mut Report) -> Option<Vec<u8>> {
     changed.then(|| writer.to_binary())
 }
 
-fn file_outcome(name: &str, raw: &[u8], report: &mut Report) -> Outcome {
+fn data_is_switch_model(raw: &[u8]) -> bool {
+    decompress_if(raw).starts_with(b"FRES    ")
+}
+
+/// `game` is the game's own file of this name, unpacked.
+fn file_outcome(name: &str, raw: &[u8], game: Option<&[u8]>, report: &mut Report) -> Outcome {
     let data = decompress_if(raw);
     let packed = |new: Vec<u8>| if raw.starts_with(b"Yaz0") { compress(new) } else { new };
     if data.len() >= 0x14 && &data[..4] == b"SARC" {
@@ -192,7 +213,7 @@ fn file_outcome(name: &str, raw: &[u8], report: &mut Report) -> Outcome {
             None => Outcome::Keep,
         }
     } else {
-        match leaf(name, &data, report) {
+        match leaf(name, &data, game, report) {
             Outcome::Replace(new) => Outcome::Replace(packed(new)),
             other => other,
         }
@@ -221,7 +242,10 @@ pub fn is_wii_u_tree(root: &Path) -> bool {
 }
 
 /// Converts what can be converted in an unpacked Wii U mod, in place, and leaves out what can't.
-pub fn convert_tree(root: &Path) -> Result<Report> {
+///
+/// `game` are the folders of the game's own files (the base game's and the DLC's), for what a conversion completes
+/// from them.
+pub fn convert_tree(root: &Path, game: &[std::path::PathBuf]) -> Result<Report> {
     let mut report = Report::default();
     let mut roots = vec![root.to_path_buf()];
     if let Ok(options) = std::fs::read_dir(root.join("options")) {
@@ -234,9 +258,22 @@ pub fn convert_tree(root: &Path) -> Result<Report> {
             for path in files {
                 let name = path.strip_prefix(&mod_root).unwrap_or(&path).to_string_lossy().replace('\\', "/");
                 let raw = fs::read(&path)?;
-                match file_outcome(&name, &raw, &mut report) {
+                // The game's file of the same name: `content/A/B` and `aoc/0010/A/B` are both `A/B` there.
+                let inner = name.strip_prefix("content/").or_else(|| name.strip_prefix("aoc/0010/"));
+                let theirs = inner.and_then(model::switch_name).and_then(|inner| {
+                    let raw = game.iter().find_map(|dir| std::fs::read(dir.join(&inner)).ok())?;
+                    Some(decompress_if(&raw).to_vec())
+                });
+                match file_outcome(&name, &raw, theirs.as_deref(), &mut report) {
                     Outcome::Keep => (),
-                    Outcome::Replace(data) => fs::write(&path, data)?,
+                    Outcome::Replace(data) => match model::switch_name(&name).filter(|_| data_is_switch_model(&data)) {
+                        Some(renamed) => {
+                            fs::remove_file(&path)?;
+                            fs::write(mod_root.join(renamed), data)?;
+                        }
+                        None => fs::write(&path, data)?,
+                    },
+                    Outcome::Drop => fs::remove_file(&path)?,
                     Outcome::LeaveOut(reason) => {
                         fs::remove_file(&path)?;
                         report.left_out.push((name, reason));
@@ -300,7 +337,7 @@ mod tests {
         fs::write(root.join("content/Model/Loose.sbfres"), compress(b"FRES\x03\x05\x00\x04".to_vec())).unwrap();
         assert!(is_wii_u_tree(root));
 
-        let report = convert_tree(root).unwrap();
+        let report = convert_tree(root, &[]).unwrap();
         assert_eq!((report.textures, report.layouts), (1, 0));
         assert_eq!(report.left_out.len(), 4);
         assert!(!root.join("content/Model/Loose.sbfres").exists());
@@ -318,6 +355,6 @@ mod tests {
         assert_eq!(atlas.textures.len(), 1);
         assert_eq!(atlas.textures[0].name, "Key^d");
         // Nothing left to do the second time.
-        assert_eq!(convert_tree(root).unwrap(), Report::default());
+        assert_eq!(convert_tree(root, &[]).unwrap(), Report::default());
     }
 }

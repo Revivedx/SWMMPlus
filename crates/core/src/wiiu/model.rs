@@ -7,6 +7,8 @@
 
 use anyhow_ext::{bail, Context, Result};
 
+use uk_content::layout::bntx::Bntx;
+
 use super::tex::{build_bntx, gx2_kind, gx2_untile, Texture};
 
 fn be32(data: &[u8], at: usize) -> Result<u32> {
@@ -79,7 +81,13 @@ fn level(
     Ok(out)
 }
 
-fn texture(data: &[u8], at: usize) -> Result<Texture> {
+/// Where a texture record's pixels are in the file.
+fn pixel_range(data: &[u8], at: usize) -> Result<Option<std::ops::Range<usize>>> {
+    let start = pointer(data, at + 0xB0)?;
+    Ok(start.map(|start| start..start + be32(data, at + 0x24).map(|s| s as usize).unwrap_or(0)))
+}
+
+fn texture(data: &[u8], at: usize, pixel_ranges: &[std::ops::Range<usize>]) -> Result<Texture> {
     if data.get(at..at + 4) != Some(b"FTEX") {
         bail!("a texture record isn't where the file says");
     }
@@ -100,28 +108,39 @@ fn texture(data: &[u8], at: usize) -> Result<Texture> {
     let tile_mode = u8::try_from(tile_mode).ok().filter(|m| [0, 1, 2, 4].contains(m));
     let tile_mode = tile_mode.with_context(|| format!("{name}: its storage order isn't supported"))?;
     let swizzle = field(0x38)?;
-    // The first level stored in small tiles, when the texture is stored in large ones.
-    let small_from = (swizzle >> 16) & 0xFF;
     let swizzle = ((swizzle >> 8) & 7) as u8;
 
-    let pixels = pointer(data, at + 0xB0)?.with_context(|| format!("{name}: it has no pixels in this file"))?;
+    let pixels_at = pointer(data, at + 0xB0)?.with_context(|| format!("{name}: it has no pixels in this file"))?;
     let size = field(0x24)? as usize;
-    let pixels = data.get(pixels..pixels + size).with_context(|| format!("{name}: its pixels end early"))?;
+    let pixels = data.get(pixels_at..pixels_at + size).with_context(|| format!("{name}: its pixels end early"))?;
     let first = level(pixels, width, height, kind.block, kind.bytes, tile_mode, swizzle, false)
         .with_context(|| name.clone())?;
 
     let mut mips = Vec::new();
-    if levels > 1 {
-        let start =
-            pointer(data, at + 0xB4)?.with_context(|| format!("{name}: its smaller levels are in another file"))?;
-        let size = field(0x2C)? as usize;
-        let all = data.get(start..start + size).with_context(|| format!("{name}: its smaller levels end early"))?;
+    // The smaller levels are a block of their own. Files that don't say where it is would have it where the first
+    // level's offset says, counted from the pixels. A model's first texture file (.Tex1) says its textures have
+    // smaller levels and doesn't hold them: they are in the second file, and where this one says they are is past
+    // its end or in the next texture's pixels.
+    let start = match pointer(data, at + 0xB4)? {
+        Some(start) => start,
+        None => pixels_at + field(0x44)? as usize,
+    };
+    let block = start..start + field(0x2C)? as usize;
+    let held = !block.is_empty()
+        && block.end <= data.len()
+        && !pixel_ranges.iter().any(|r| r.start < block.end && block.start < r.end);
+    if levels > 1 && held {
+        let all = &data[block];
         for i in 1..levels {
             // The second level starts the block; the rest say where they start in it.
             let offset = if i == 1 { 0 } else { field(0x44 + 4 * (i as usize - 1))? as usize };
-            let mode = if tile_mode == 4 && i >= small_from { 2 } else { tile_mode };
             let from = all.get(offset..).with_context(|| format!("{name}: level {i} is outside the file"))?;
             let (w, h) = ((width >> i).max(1), (height >> i).max(1));
+            // A level too small for the large tiles is stored in small ones.
+            let (tiles_w, tiles_h) =
+                (w.next_power_of_two().div_ceil(kind.block), h.next_power_of_two().div_ceil(kind.block));
+            let small = tiles_w < 32 * (4 / kind.bytes).max(1) || tiles_h < 16;
+            let mode = if tile_mode == 4 && small { 2 } else { tile_mode };
             mips.push(
                 level(from, w, h, kind.block, kind.bytes, mode, swizzle, true)
                     .with_context(|| format!("{name}: level {i}"))?,
@@ -144,10 +163,17 @@ pub fn read_textures(data: &[u8]) -> Result<(String, Vec<Texture>)> {
     if count > 4096 {
         bail!("the file says it holds {count} textures");
     }
-    let mut textures = Vec::with_capacity(count);
+    let mut records = Vec::with_capacity(count);
     for i in 1..=count {
-        let record = pointer(data, list + 8 + 16 * i + 12)?.context("a texture is missing")?;
-        textures.push(texture(data, record)?);
+        records.push(pointer(data, list + 8 + 16 * i + 12)?.context("a texture is missing")?);
+    }
+    let mut pixel_ranges = Vec::with_capacity(count);
+    for &record in &records {
+        pixel_ranges.extend(pixel_range(data, record)?);
+    }
+    let mut textures = Vec::with_capacity(count);
+    for record in records {
+        textures.push(texture(data, record, &pixel_ranges)?);
     }
     Ok((name, textures))
 }
@@ -258,14 +284,109 @@ pub fn switch_archive(data: &[u8]) -> Option<&[u8]> {
     data.get(start..start + size).filter(|d| d.starts_with(b"BNTX"))
 }
 
-/// A Wii U model file that holds only textures, as the Switch's. Returns how many textures it holds.
-pub fn convert_texture_file(data: &[u8]) -> Result<(Vec<u8>, usize)> {
-    let (name, textures) = read_textures(data)?;
+/// The game's texture of this name in its texture archive: whether its first level is the same, and how many
+/// levels it has. `None` when the game has no such texture.
+fn in_game(archive: &[u8], texture: &Texture) -> Option<(bool, usize)> {
+    let le = |at: usize| Some(u32::from_le_bytes(archive.get(at..at + 4)?.try_into().ok()?) as usize);
+    let find = || -> Option<Option<(bool, usize)>> {
+        let (count, table) = (le(0x24)?, le(0x28)?);
+        for i in 0..count {
+            let record = le(table + 8 * i)?;
+            let name = le(record + 0x60)?;
+            let length = u16::from_le_bytes(archive.get(name..name + 2)?.try_into().ok()?) as usize;
+            if archive.get(name + 2..name + 2 + length)? != texture.name.as_bytes() {
+                continue;
+            }
+            let info = record + 0x10;
+            let kind = texture.kind;
+            let levels = u16::from_le_bytes(archive.get(info + 6..info + 8)?.try_into().ok()?) as usize;
+            if (le(info + 0x0C)?, le(info + 0x14)?, le(info + 0x18)?, le(info + 0x20)?)
+                != (kind.nx_format as usize, texture.width as usize, texture.height as usize, 1)
+                || le(info + 0x48)? != kind.channels as usize
+            {
+                return Some(Some((false, levels)));
+            }
+            let pixels = archive.get(le(le(record + 0x70)?)?..)?;
+            let (w, h) = (texture.width.div_ceil(kind.block), texture.height.div_ceil(kind.block));
+            let theirs = super::tex::tegra_unswizzle_at(pixels, w, h, kind.bytes, le(info + 0x24)? as u32)?;
+            return Some(Some((texture.layers.first() == Some(&theirs), levels)));
+        }
+        Some(None)
+    };
+    find().flatten()
+}
+
+/// Gives a texture that came at full size only its smaller levels, down to one pixel.
+fn add_levels(texture: &mut Texture) {
+    if !texture.mips.is_empty() || texture.layers.len() != 1 {
+        return;
+    }
+    let count = texture.width.max(texture.height).ilog2() as usize;
+    match super::mips::smaller_levels(texture.kind, texture.width, texture.height, &texture.layers[0], count) {
+        Some(levels) => texture.mips = levels,
+        None => log::debug!("{} keeps one level: its format can't be packed here", texture.name),
+    }
+}
+
+/// A Wii U model file that holds only textures, as the Switch's. Returns how many textures it changes.
+///
+/// `game` is the game's own Switch file of that name, when there is one. Textures the mod leaves as they are come
+/// from it, with their smaller levels, which a Wii U model's texture file doesn't have; so do textures only the
+/// Switch file has.
+pub fn convert_texture_file(data: &[u8], game: Option<&[u8]>) -> Result<(Vec<u8>, usize)> {
+    let (name, mut textures) = read_textures(data)?;
     if textures.is_empty() {
         bail!("it holds no textures");
     }
-    let bntx = build_bntx("textures", &textures)?;
+    // A model's texture file: its textures are seen from afar and need their smaller levels.
+    let of_a_model = name.ends_with(".Tex1");
+    let game = game.and_then(switch_archive).and_then(|archive| Some((archive, Bntx::parse(archive)?)));
+    let bntx = match game {
+        Some((archive, mut whole)) => {
+            let mut changed = Vec::new();
+            for mut texture in textures {
+                match in_game(archive, &texture) {
+                    Some((true, _)) => continue,
+                    Some((false, levels)) if levels > 1 => add_levels(&mut texture),
+                    None if of_a_model => add_levels(&mut texture),
+                    _ => {}
+                }
+                changed.push(texture);
+            }
+            textures = changed;
+            if !textures.is_empty() {
+                let changed = build_bntx("textures", &textures)?;
+                whole.merge(Bntx::parse(&changed).context("the texture archive didn't come out readable")?);
+            }
+            whole.to_binary()
+        }
+        None => {
+            if of_a_model {
+                textures.iter_mut().for_each(add_levels);
+            }
+            build_bntx("textures", &textures)?
+        }
+    };
+    // A model's textures are "Name.Tex1" on the Wii U and "Name.Tex" on the Switch.
+    let name = match name.strip_suffix(".Tex1") {
+        Some(stem) => format!("{stem}.Tex"),
+        None => name,
+    };
     Ok((build_fres(&name, &bntx), textures.len()))
+}
+
+/// The name a converted texture file has on the Switch, when it differs: `Name.Tex1.sbfres` is `Name.Tex.sbfres`.
+pub fn switch_name(name: &str) -> Option<String> {
+    [".Tex1.sbfres", ".Tex1.bfres"].iter().find_map(|suffix| {
+        let stem = name.strip_suffix(suffix)?;
+        Some(format!("{stem}.Tex{}", &suffix[5..]))
+    })
+}
+
+/// The Wii U's second texture file of a model: small copies of the first file's textures, shown while that one
+/// loads. The Switch has no such file.
+pub fn is_second_texture_file(name: &str) -> bool {
+    name.ends_with(".Tex2.sbfres") || name.ends_with(".Tex2.bfres")
 }
 
 #[cfg(test)]
@@ -333,7 +454,7 @@ mod tests {
         assert_eq!(texture.mips[0][24..28], [33, 34, 35, 36]);
         assert_eq!(texture.mips[1], (0..3 * 4).map(|p| (p + 2) as u8).collect::<Vec<_>>());
 
-        let (switch, count) = convert_texture_file(&wii_u).unwrap();
+        let (switch, count) = convert_texture_file(&wii_u, None).unwrap();
         assert_eq!(count, 1);
         assert_eq!(&switch[..8], b"FRES    ");
         let archive = switch_archive(&switch).unwrap();
@@ -345,12 +466,45 @@ mod tests {
     }
 
     #[test]
+    fn a_models_textures_get_their_levels_and_the_games_own() {
+        assert_eq!(switch_name("content/Model/A.Tex1.sbfres").as_deref(), Some("content/Model/A.Tex.sbfres"));
+        assert_eq!(switch_name("Model/A.Tex1.bfres").as_deref(), Some("Model/A.Tex.bfres"));
+        assert_eq!(switch_name("Model/A.sbfres"), None);
+        assert!(is_second_texture_file("Model/A.Tex2.sbfres") && !is_second_texture_file("Model/A.Tex1.sbfres"));
+
+        // The file says three levels and holds one, as a model's first texture file does.
+        let mut wii_u = wii_u_file("Thing.Tex1", "Thing_Alb", 8, 8, 1);
+        wii_u[0x94 + 0x17] = 3;
+        let levels = |file: &[u8]| {
+            let archive = switch_archive(file).unwrap();
+            let record = u32::from_le_bytes(archive[0x28..0x2C].try_into().unwrap()) as usize;
+            let record = u32::from_le_bytes(archive[record..record + 4].try_into().unwrap()) as usize;
+            u16::from_le_bytes(archive[record + 0x16..record + 0x18].try_into().unwrap())
+        };
+        let (alone, changed) = convert_texture_file(&wii_u, None).unwrap();
+        assert_eq!((changed, levels(&alone)), (1, 4));
+        assert!(alone.windows(9).any(|w| w == b"Thing.Tex"));
+        assert!(!alone.windows(10).any(|w| w == b"Thing.Tex1"));
+
+        // Against a game that has the same texture, nothing changes and the game's is kept.
+        let (again, changed) = convert_texture_file(&wii_u, Some(&alone)).unwrap();
+        assert_eq!(changed, 0);
+        assert_eq!(switch_archive(&again), switch_archive(&alone));
+        // A changed pixel makes it the mod's, with new levels.
+        let last = wii_u.len() - 1;
+        wii_u[last] ^= 0xFF;
+        let (modded, changed) = convert_texture_file(&wii_u, Some(&alone)).unwrap();
+        assert_eq!((changed, levels(&modded)), (1, 4));
+        assert_ne!(switch_archive(&modded), switch_archive(&alone));
+    }
+
+    #[test]
     fn files_with_more_than_textures_are_refused() {
         let mut wii_u = wii_u_file("Thing.bfres", "Thing", 8, 8, 1);
         wii_u[0x51] = 1; // a model
         assert!(is_wii_u(&wii_u) && !only_textures(&wii_u));
         let mut odd = wii_u_file("Thing.bfres", "Thing", 8, 8, 1);
         odd[0x94 + 0x1B] = 0x99;
-        assert!(convert_texture_file(&odd).is_err());
+        assert!(convert_texture_file(&odd, None).is_err());
     }
 }
