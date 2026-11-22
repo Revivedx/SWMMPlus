@@ -134,6 +134,9 @@ impl App {
         if menu_item(ui, Icon::Book, &"SW_Menu_Readme".localize(), true) {
             open::that("https://github.com/Revivedx/SavageWindRecomp").unwrap_or(());
         }
+        if menu_item(ui, Icon::Book, &"SW_Menu_SwmmPlus".localize(), true) {
+            open::that("https://github.com/Revivedx/SWMMPlus").unwrap_or(());
+        }
         ui.separator();
         if menu_item(ui, Icon::Info, &"Menu_Help_About".localize(), true) {
             self.do_update(Message::ShowAbout);

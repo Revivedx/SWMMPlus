@@ -294,7 +294,9 @@ impl App {
                 egui::Grid::new("aboutLinks").num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| {
                     for (name, text, url) in [
                         ("Savage Wind", "github.com/Revivedx/SavageWindRecomp", "https://github.com/Revivedx/SavageWindRecomp"),
+                        ("SWMM+", "github.com/Revivedx/SWMMPlus", "https://github.com/Revivedx/SWMMPlus"),
                         ("Mods", "gamebanana.com", "https://gamebanana.com/games/6386"),
+                        ("Web", "revi.contact", "https://revi.contact"),
                     ] {
                         ui.label(RichText::new(name).color(palette.muted));
                         if ui.link(text).clicked() {
