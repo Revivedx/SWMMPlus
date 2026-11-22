@@ -245,6 +245,16 @@ pub fn launch_savage_wind(core: &Manager, mods: Vec<Mod>, dirty: Manifest) -> Re
     Ok(Message::Launched)
 }
 
+pub fn open_configuration(core: &Manager, mods: Vec<Mod>, dirty: Manifest) -> Result<Message> {
+    if !dirty.is_empty() {
+        log::info!("Applying pending changes before opening Savage Wind's Configuration");
+        apply_changes(core, mods, Some(dirty))?;
+    }
+    let child = swmm_core::savage_wind::open_configuration(&core.settings())?;
+    log::info!("Savage Wind's Configuration opened (process {}), closing SWMM+", child.id());
+    Ok(Message::Quit)
+}
+
 pub fn sw_auto_detect(core: Arc<Manager>) -> Result<Message> {
     let result = {
         let mut settings = core.settings_mut();

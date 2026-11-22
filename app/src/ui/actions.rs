@@ -453,6 +453,15 @@ impl App {
                     });
                     self.do_update(Message::ResetMods(None));
                 }
+                Message::OpenConfiguration => {
+                    let mods = self.mods.clone();
+                    let dirty = std::mem::take(self.dirty_mut().deref_mut());
+                    self.do_task(move |core| jobs::open_configuration(&core, mods, dirty));
+                }
+                Message::Quit => {
+                    self.busy.set(false);
+                    ctx.send_viewport_cmd(eframe::egui::ViewportCommand::Close);
+                }
                 Message::SwAutoDetect => {
                     self.do_task(jobs::sw_auto_detect);
                 }

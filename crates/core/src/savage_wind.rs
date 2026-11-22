@@ -526,6 +526,23 @@ pub fn launch(settings: &Settings) -> Result<Child> {
     command.spawn().context("Failed to start Savage Wind")
 }
 
+/// Starts Savage Wind's Configuration window as a process of its own, so that it outlives SWMM+.
+pub fn open_configuration(settings: &Settings) -> Result<Child> {
+    let mut command = launch_command(settings)?;
+    command.arg("--config").env_remove("SWMM_LAUNCHED");
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+        command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+    }
+    command.spawn().context("Failed to open Savage Wind's Configuration")
+}
+
 /// Whether SWMM's persistent SAVAGEWIND_ROMFS_OVERLAY is still set for the user (Windows: HKCU\Environment;
 /// elsewhere: its environment.d file).
 fn legacy_env_present() -> bool {

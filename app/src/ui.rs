@@ -163,6 +163,8 @@ pub enum Message {
     SetPage(Page),
     Launch,
     Launched,
+    OpenConfiguration,
+    Quit,
     SwAutoDetect,
 }
 

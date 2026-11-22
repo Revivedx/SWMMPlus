@@ -108,6 +108,17 @@ impl App {
         if menu_item(ui, Icon::Wind, &"SW_Menu_AutoDetect".localize(), true) {
             self.do_update(Message::SwAutoDetect);
         }
+        if menu_item(
+            ui,
+            Icon::Sliders,
+            &"SW_Menu_Configuration".localize(),
+            self.game_status.can_launch && !self.busy.get(),
+        ) {
+            self.do_update(Message::Confirm(
+                Message::OpenConfiguration.into(),
+                "SW_Configuration_Confirm".localize().to_string(),
+            ));
+        }
         ui.separator();
         let settings = self.core.settings();
         let overlay = savage_wind::overlay_dir(&settings);

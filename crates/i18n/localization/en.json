@@ -115,6 +115,8 @@
   "WiiU_Notice": "This is a Wii U mod. SWMM+ converted it on this PC for the Switch game. It may work, work in part or not work.",
   "SW_Launched": "Savage Wind started with your mods",
   "SW_Menu_AutoDetect": "Detect Savage Wind",
+  "SW_Menu_Configuration": "Savage Wind Configuration",
+  "SW_Configuration_Confirm": "Open Savage Wind's Configuration?\n\nSWMM+ will close. Pending changes are applied first.",
   "SW_Menu_GameFolder": "Open Savage Wind folder",
   "SW_Menu_Mod": "Mod",
   "SW_Menu_Options": "Configure options",
