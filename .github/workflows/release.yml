@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # objc2 0.4, which eframe 0.28 brings in on macOS, doesn't compile with the newest Rust.
-      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release --workspace
