@@ -53,6 +53,22 @@ pub fn finish(dir: &Path, name: &str, version: &str) {
     }
 }
 
+/// Carries what a mod came as over to its new name and version, when its details are replaced after the
+/// conversion (the ones from GameBanana).
+pub fn renamed(dir: &Path, old: (&str, &str), new: (&str, &str)) {
+    if old == new {
+        return;
+    }
+    let mut origins = read(dir);
+    let Some(origin) = origins.get(&key(old.0, old.1)).cloned() else { return };
+    origins.insert(key(new.0, new.1), origin);
+    if let Ok(text) = serde_json::to_string_pretty(&origins) {
+        if let Err(e) = fs::write(dir.join(ORIGINS), text) {
+            log::warn!("Could not note where {} came from: {e}", new.0);
+        }
+    }
+}
+
 /// A mod's text with what would break the list taken out: one line, no line that starts as a note.
 fn clean(text: &str) -> String {
     let text: String = text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect();
@@ -99,5 +115,15 @@ mod tests {
     fn a_mods_text_cant_break_the_list() {
         assert_eq!(clean("  # Linkle\r\nsecond line "), "Linkle  second line");
         assert_eq!(key("Linkle", "1.0.2"), "Linkle|1.0.2");
+    }
+
+    #[test]
+    fn a_renamed_mod_keeps_what_it_came_as() {
+        let dir = std::env::temp_dir().join(format!("swmm-origin-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(ORIGINS), r#"{"Linkle Mod|1.0.1":"BNP, Switch"}"#).unwrap();
+        renamed(&dir, ("Linkle Mod", "1.0.1"), ("Linkle Mod for Switch", "1.0.1"));
+        assert_eq!(read(&dir).get("Linkle Mod for Switch|1.0.1").map(String::as_str), Some("BNP, Switch"));
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

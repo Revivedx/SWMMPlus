@@ -83,7 +83,15 @@ pub fn open_downloaded_mod(
     match swmm_core::source::apply(&mod_.path, &source)
         .and_then(|updated| ModReader::open_peek(updated, vec![]))
     {
-        Ok(reader) => Ok(Message::HandleMod(Mod::from_reader(reader))),
+        Ok(reader) => {
+            // The details from GameBanana rename the mod: what it came as goes with it.
+            swmm_core::origin::renamed(
+                &core.settings().platform_dir(),
+                (&mod_.meta.name, &mod_.meta.version),
+                (&reader.meta.name, &reader.meta.version),
+            );
+            Ok(Message::HandleMod(Mod::from_reader(reader)))
+        }
         Err(e) => {
             log::warn!("Could not use the GameBanana details for {}: {e:?}", mod_.meta.name);
             Ok(Message::HandleMod(mod_))
