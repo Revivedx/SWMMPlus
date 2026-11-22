@@ -92,7 +92,7 @@ impl Intro {
                 let title = painter.layout_no_wrap("SWMM+".to_string(), title_font, palette.text);
                 let mut tag_job = egui::text::LayoutJob::default();
                 tag_job.append(
-                    "SAVAGE WIND MOD MANAGER",
+                    "SAVAGE WIND MOD MANAGER +",
                     0.0,
                     egui::TextFormat {
                         font_id: FontId::proportional((title_size * 0.13).clamp(12.0, 22.0)),
@@ -140,7 +140,7 @@ impl Intro {
                 let tag_in = ease_out(phase(t, 1.05, 0.6));
                 let mut tag_job = egui::text::LayoutJob::default();
                 tag_job.append(
-                    "SAVAGE WIND MOD MANAGER",
+                    "SAVAGE WIND MOD MANAGER +",
                     0.0,
                     egui::TextFormat {
                         font_id: FontId::proportional((title_size * 0.13).clamp(12.0, 22.0)),

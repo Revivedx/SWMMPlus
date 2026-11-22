@@ -506,7 +506,7 @@ pub fn main() -> Result<(), eframe::Error> {
                     }
                     .into(),
                 ),
-                title: Some("Savage Wind Mod Manager".into()),
+                title: Some("Savage Wind Mod Manager +".into()),
                 app_id: Some("swmm".into()),
                 decorations: Some(false),
                 transparent: Some(!cfg!(windows)),

@@ -282,7 +282,7 @@ impl App {
                         .selectable(false),
                     );
                     ui.add_space(2.0);
-                    ui.label(RichText::new("Savage Wind Mod Manager").color(palette.muted));
+                    ui.label(RichText::new("Savage Wind Mod Manager +").color(palette.muted));
                     ui.add_space(2.0);
                     ui.label(
                         RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))

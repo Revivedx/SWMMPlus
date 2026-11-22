@@ -654,7 +654,7 @@ impl App {
                         ui.add_space(2.0);
                         ui.add(
                             egui::Label::new(
-                                RichText::new("Savage Wind Mod Manager")
+                                RichText::new("Savage Wind Mod Manager +")
                                     .family(egui::FontFamily::Name(swmm_widgets::TITLE_FAMILY.into()))
                                     .size(19.0)
                                     .color(palette.text),
