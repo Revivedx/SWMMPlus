@@ -4,7 +4,7 @@ repo="__REPO__"
 tag="__TAG__"
 case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) asset="swmm-x86_64-linux.tar.xz" ;;
-    *) echo "SWMM releases are built for Windows and Linux on x86-64. Build it from source on this system." >&2; exit 1 ;;
+    *) echo "SWMM+ releases are built for Windows and Linux on x86-64. Build it from source on this system." >&2; exit 1 ;;
 esac
 url="https://github.com/$repo/releases/download/$tag/$asset"
 install_dir="${XDG_DATA_HOME:-$HOME/.local/share}/swmm"
@@ -22,7 +22,7 @@ fi
 
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
-echo "Downloading SWMM $tag..."
+echo "Downloading SWMM+ $tag..."
 fetch "$url" "$temp/$asset"
 mkdir -p "$install_dir" "$bin_dir" "$apps_dir"
 tar -xJf "$temp/$asset" -C "$install_dir"
@@ -32,7 +32,7 @@ ln -sf "$install_dir/swmm" "$bin_dir/swmm"
 cat > "$apps_dir/swmm.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=SWMM
+Name=SWMM+
 Comment=Savage Wind Mod Manager
 Exec=$install_dir/swmm
 Icon=$install_dir/swmm.png
@@ -40,5 +40,5 @@ Terminal=false
 Categories=Game;Utility;
 DESKTOP
 
-echo "SWMM $tag is installed in $install_dir"
+echo "SWMM+ $tag is installed in $install_dir"
 echo "Start it from your app menu or run: swmm"

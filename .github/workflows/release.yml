@@ -62,8 +62,29 @@ jobs:
           name: linux
           path: out/*
 
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --workspace
+      - name: Package
+        run: |
+          mkdir -p out stage
+          cp target/release/swmm LICENSE stage/
+          cp assets/icon.png stage/swmm.png
+          tar -cJf "out/swmm-aarch64-macos.tar.xz" -C stage .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: out/*
+
   release:
-    needs: [windows, linux]
+    # The macOS build is new: when it fails, the release still goes out with Windows and Linux.
+    needs: [windows, linux, macos]
+    if: ${{ !cancelled() && needs.windows.result == 'success' && needs.linux.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,9 +102,9 @@ jobs:
           sha256sum swmm-* install.* > SHA256SUMS.txt
           version="${TAG#v}"
           {
-            echo "![SWMM](https://raw.githubusercontent.com/$repo/refs/heads/main/assets/swmm.png)"
+            echo "![SWMM+](https://raw.githubusercontent.com/$repo/refs/heads/main/assets/swmm.png)"
             echo
-            echo "**Savage Wind Mod Manager $version**. Install, merge and play Breath of the Wild mods on Savage Wind."
+            echo "**Savage Wind Mod Manager + $version**. Install, merge and play Breath of the Wild mods on Savage Wind, including BNP and Wii U mods and mods made for other versions of the game. A GPL fork of [SWMM](https://github.com/ustruct/SWMM) by ustruct, built on [UKMM](https://github.com/NiceneNerd/ukmm)."
             echo
             echo "## Downloads"
             echo
@@ -92,6 +113,9 @@ jobs:
             echo "| Windows | [swmm-x86_64-windows.msi]($base/swmm-x86_64-windows.msi) | Installer, recommended |"
             echo "| Windows | [swmm-x86_64-windows.zip]($base/swmm-x86_64-windows.zip) | Portable, no installation needed |"
             echo "| Linux and Steam Deck | [swmm-x86_64-linux.tar.xz]($base/swmm-x86_64-linux.tar.xz) | Archive |"
+            if [ -f swmm-aarch64-macos.tar.xz ]; then
+              echo "| macOS, Apple silicon | [swmm-aarch64-macos.tar.xz]($base/swmm-aarch64-macos.tar.xz) | Archive, not signed |"
+            fi
             echo
             echo "## Install with one command"
             echo
@@ -116,8 +140,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            gh release edit "$TAG" --repo "${{ github.repository }}" --title "SWMM $TAG" --notes-file notes.md
+            gh release edit "$TAG" --repo "${{ github.repository }}" --title "SWMM+ $TAG" --notes-file notes.md
             gh release upload "$TAG" out/* --repo "${{ github.repository }}" --clobber
           else
-            gh release create "$TAG" out/* --repo "${{ github.repository }}" --title "SWMM $TAG" --notes-file notes.md --target "${{ github.sha }}"
+            gh release create "$TAG" out/* --repo "${{ github.repository }}" --title "SWMM+ $TAG" --notes-file notes.md --target "${{ github.sha }}"
           fi

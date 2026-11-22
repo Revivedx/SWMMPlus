@@ -1,5 +1,5 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
-  <Package Name="Savage Wind Mod Manager" Manufacturer="SWMM contributors" Version="$(var.Version)" UpgradeCode="ad8c2586-529f-4dc3-aa68-673e7deb3e1c" Scope="perMachine" Compressed="yes">
+  <Package Name="Savage Wind Mod Manager +" Manufacturer="SWMM+ contributors" Version="$(var.Version)" UpgradeCode="ad8c2586-529f-4dc3-aa68-673e7deb3e1c" Scope="perMachine" Compressed="yes">
     <MajorUpgrade DowngradeErrorMessage="A newer version of Savage Wind Mod Manager is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="SwmmIcon" SourceFile="$(var.Assets)\swmm.ico" />
@@ -17,7 +17,7 @@
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Component Id="StartMenuShortcut">
-        <Shortcut Id="SwmmShortcut" Name="Savage Wind Mod Manager" Description="Savage Wind Mod Manager" Target="[INSTALLFOLDER]swmm.exe" WorkingDirectory="INSTALLFOLDER" Icon="SwmmIcon" />
+        <Shortcut Id="SwmmShortcut" Name="Savage Wind Mod Manager +" Description="Savage Wind Mod Manager +" Target="[INSTALLFOLDER]swmm.exe" WorkingDirectory="INSTALLFOLDER" Icon="SwmmIcon" />
         <RegistryValue Root="HKLM" Key="Software\SWMM" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
