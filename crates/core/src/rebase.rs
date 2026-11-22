@@ -14,6 +14,8 @@
 //! - an actor whose memory size is smaller in the mod's file than in the player's game gets the game's size. The
 //!   size is the room the game sets aside for the actor's code, which grew; a mod that needs more keeps its own.
 //!
+//! - a text that is the old version's and not the mod's work gives way to the game's (see [`crate::texts`]).
+//!
 //! Only files the player's version changed since 1.6.0 are touched. BNPs and packaged mods don't need this: they
 //! carry their changes, not whole files.
 
@@ -42,6 +44,7 @@ pub struct Report {
     pub flags_kept: usize,
     pub flags_moved: usize,
     pub saved_flags_kept: usize,
+    pub texts_kept: usize,
 }
 
 impl Report {
@@ -369,16 +372,34 @@ pub fn rebase_tree(staged: &Path, game: &[PathBuf]) -> Result<Report> {
                 fs::write(&path, new)?;
             }
         }
+        // Each language's texts.
+        let packs = std::fs::read_dir(root.join("Pack")).into_iter().flatten().filter_map(|e| e.ok());
+        for pack in packs {
+            let file_name = pack.file_name().to_string_lossy().to_string();
+            let Some(language) = crate::texts::language(&file_name) else { continue };
+            let Some(theirs) = game.first().and_then(|dir| std::fs::read(dir.join("Pack").join(&file_name)).ok())
+            else {
+                continue;
+            };
+            let mine = fs::read(pack.path())?;
+            let new = crate::texts::language_pack(&mine, &theirs, language)
+                .with_context(|| format!("Failed on {file_name}"))?;
+            if let Some((new, count)) = new {
+                fs::write(pack.path(), new)?;
+                report.texts_kept += count;
+            }
+        }
     }
     if report.changed() {
         log::info!(
             "The mod was made for another version of the game. Kept from this one: {} actors, {} actor sizes, {} \
-             flags ({} more under the game's kind), {} saved flags",
+             flags ({} more under the game's kind), {} saved flags, {} texts",
             report.actors_kept,
             report.actor_sizes,
             report.flags_kept,
             report.flags_moved,
-            report.saved_flags_kept
+            report.saved_flags_kept,
+            report.texts_kept
         );
     }
     Ok(report)
