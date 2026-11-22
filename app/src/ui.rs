@@ -492,7 +492,7 @@ pub fn main() -> Result<(), eframe::Error> {
     log::debug!("Logger initialized");
     log::info!("Started SWMM v{}", env!("CARGO_PKG_VERSION"));
     eframe::run_native(
-        "SWMM",
+        "SWMM+",
         NativeOptions {
             viewport: ViewportBuilder {
                 icon: Some(

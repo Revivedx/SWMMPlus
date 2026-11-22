@@ -89,7 +89,7 @@ impl Intro {
                 let drift = -out * 10.0;
 
                 let title_font = FontId::new(title_size, FontFamily::Name(swmm_widgets::TITLE_FAMILY.into()));
-                let title = painter.layout_no_wrap("SWMM".to_string(), title_font, palette.text);
+                let title = painter.layout_no_wrap("SWMM+".to_string(), title_font, palette.text);
                 let mut tag_job = egui::text::LayoutJob::default();
                 tag_job.append(
                     "SAVAGE WIND MOD MANAGER",
@@ -128,7 +128,7 @@ impl Intro {
                     );
                     let color = palette.text.gamma_multiply((0.35 + 0.65 * wipe) * fade);
                     let shaped = painter.layout_no_wrap(
-                        "SWMM".to_string(),
+                        "SWMM+".to_string(),
                         FontId::new(title_size, FontFamily::Name(swmm_widgets::TITLE_FAMILY.into())),
                         color,
                     );

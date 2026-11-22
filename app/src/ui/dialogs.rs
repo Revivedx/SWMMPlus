@@ -274,7 +274,7 @@ impl App {
                     ui.add_space(6.0);
                     ui.add(
                         egui::Label::new(
-                            RichText::new("SWMM")
+                            RichText::new("SWMM+")
                                 .family(egui::FontFamily::Name(swmm_widgets::TITLE_FAMILY.into()))
                                 .size(34.0)
                                 .color(palette.text),
@@ -342,7 +342,7 @@ impl App {
             };
             egui::ScrollArea::vertical().drag_to_scroll(false).max_height(360.0).show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 6.0;
-                heading(ui, "SWMM");
+                heading(ui, "SWMM+");
                 body(ui, crate::COPYRIGHT);
                 body(
                     ui,

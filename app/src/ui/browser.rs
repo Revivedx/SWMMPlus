@@ -36,6 +36,7 @@ const DETAILS_WIDTH: f32 = 330.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BrowseSort {
     Popular,
+    Downloads,
     Newest,
     Updated,
 }
@@ -44,6 +45,7 @@ impl BrowseSort {
     fn key(self) -> &'static str {
         match self {
             BrowseSort::Popular => "Browse_Sort_Popular",
+            BrowseSort::Downloads => "Browse_Sort_Downloads",
             BrowseSort::Newest => "Browse_Sort_Newest",
             BrowseSort::Updated => "Browse_Sort_Updated",
         }
@@ -51,7 +53,7 @@ impl BrowseSort {
 
     fn api(self) -> &'static str {
         match self {
-            BrowseSort::Popular => "default",
+            BrowseSort::Popular | BrowseSort::Downloads => "default",
             BrowseSort::Newest => "new",
             BrowseSort::Updated => "updated",
         }
@@ -290,7 +292,15 @@ fn fetch_page_uncached(query: &str, sort: BrowseSort, page: u32) -> Result<(Vec<
         }
         search.push_str("switch");
     }
-    let url = if search.is_empty() {
+    let url = if sort == BrowseSort::Downloads {
+        // The search has no order by downloads; the list of the game's mods has, with a filter on the name.
+        let name = if query.trim().is_empty() { "switch" } else { query.trim() };
+        format!(
+            "{API}/Mod/Index?_nPage={page}&_nPerpage={PER_PAGE}&_aFilters%5BGeneric_Game%5D={GAME_ID}&\
+             _sSort=Generic_MostDownloaded&_aFilters%5BGeneric_Name%5D=contains,{}",
+            encode(name)
+        )
+    } else if search.is_empty() {
         format!(
             "{API}/Game/{GAME_ID}/Subfeed?_nPage={page}&_nPerpage={PER_PAGE}&_sSort={}&_csvModelInclusions=Mod",
             sort.api()
@@ -299,7 +309,7 @@ fn fetch_page_uncached(query: &str, sort: BrowseSort, page: u32) -> Result<(Vec<
         format!(
             "{API}/Util/Search/Results?_sModelName=Mod&_sOrder={}&_idGameRow={GAME_ID}&_sSearchString={}&_nPage={page}&_nPerpage={PER_PAGE}",
             match sort {
-                BrowseSort::Popular => "best_match",
+                BrowseSort::Popular | BrowseSort::Downloads => "best_match",
                 BrowseSort::Newest | BrowseSort::Updated => "date",
             },
             encode(&search)
@@ -709,7 +719,7 @@ impl App {
                 ui.set_min_width(filter_width + 40.0);
                 ui.label(RichText::new("Browse_Sort".localize()).size(12.0).color(palette.muted));
                 ui.add_space(2.0);
-                for sort in [BrowseSort::Popular, BrowseSort::Newest, BrowseSort::Updated] {
+                for sort in [BrowseSort::Popular, BrowseSort::Downloads, BrowseSort::Newest, BrowseSort::Updated] {
                     let picked = sort == current;
                     let job = swmm_widgets::icons::icon_text_job(
                         ui,

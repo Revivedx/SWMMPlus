@@ -34,8 +34,9 @@ pub fn is_savage_wind_exe(path: &Path) -> bool {
         return false;
     };
     let squashed: std::string::String = name.chars().filter(|c| c.is_alphanumeric() || *c == '.').collect();
+    // An AppImage only runs on Linux: elsewhere it isn't the game's executable, whatever its name.
     EXE_NAMES.iter().any(|n| n.to_lowercase() == name)
-        || (squashed.contains("savagewind") && name.ends_with(".appimage"))
+        || (cfg!(all(unix, not(target_os = "macos"))) && squashed.contains("savagewind") && name.ends_with(".appimage"))
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -485,6 +486,13 @@ pub fn launch_command(settings: &Settings) -> Result<Command> {
     if !exe.exists() {
         anyhow_ext::bail!("Savage Wind's executable was not found at {}", exe.display());
     }
+    #[cfg(windows)]
+    if !exe.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")) {
+        anyhow_ext::bail!(
+            "{} isn't a Windows program. Choose savagewind.exe on the Settings page.",
+            exe.display()
+        );
+    }
     #[cfg(target_os = "macos")]
     let mut command = if exe.extension().map(|e| e == "app").unwrap_or(false) {
         let mut c = Command::new("open");
@@ -912,7 +920,10 @@ mod tests {
 
     #[test]
     fn exe_names() {
-        assert!(is_savage_wind_exe(Path::new("Savage_Wind-0.4.0-alpha.4-x86_64.AppImage")));
+        assert_eq!(
+            is_savage_wind_exe(Path::new("Savage_Wind-0.4.0-alpha.4-x86_64.AppImage")),
+            cfg!(all(unix, not(target_os = "macos")))
+        );
         assert!(!is_savage_wind_exe(Path::new("other.exe")));
     }
 }
