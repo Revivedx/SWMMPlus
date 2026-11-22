@@ -34,6 +34,14 @@ use roead::{
     yaz0::{compress, decompress_if},
 };
 
+/// What the last mods read were given from the player's version, for the player to be told.
+static TOLD: parking_lot::Mutex<Option<Report>> = parking_lot::Mutex::new(None);
+
+/// What mods read since the last call were given from the player's version, if anything.
+pub fn take_report() -> Option<Report> {
+    TOLD.lock().take()
+}
+
 static STOCK: LazyLock<StockHashTable> = LazyLock::new(|| StockHashTable::new(&Platform::Switch));
 
 /// What was put on the player's version.
@@ -391,6 +399,7 @@ pub fn rebase_tree(staged: &Path, game: &[PathBuf]) -> Result<Report> {
         }
     }
     if report.changed() {
+        *TOLD.lock() = Some(report);
         log::info!(
             "The mod was made for another version of the game. Kept from this one: {} actors, {} actor sizes, {} \
              flags ({} more under the game's kind), {} saved flags, {} texts",

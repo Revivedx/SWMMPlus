@@ -101,6 +101,10 @@ fn read_mod(core: &Manager, path: &Path, meta: Option<Meta>) -> Result<Mod> {
 {}", "WiiU_Notice".localize(), notes.join("
 "))));
     }
+    // So was a mod made for another version of the game.
+    if swmm_core::rebase::take_report().is_some() && mod_.is_ok() {
+        send_message(Message::Notice("Version_Notice".localize().to_string()));
+    }
     mod_
 }
 

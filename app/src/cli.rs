@@ -162,6 +162,9 @@ impl Runner {
         for line in notes {
             println!("{line}");
         }
+        if swmm_core::rebase::take_report().is_some() {
+            println!("This mod was made for another version of the game. SWMM+ brought it to yours on this PC: what the mod changes goes in as it is, and what only your version has stays.");
+        }
         println!("Installing {}...", mod_.meta.name);
         Ok(Some(path))
     }

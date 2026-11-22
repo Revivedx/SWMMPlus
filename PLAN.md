@@ -79,11 +79,13 @@ Done:
    tells them from the mod's own work: a text on the list gives way to the game's (`texts.rs`). The mod's own
    texts go in as they are.
 
+5. The player is told when a mod was brought to their version, in the window and on the command line. BNPs and
+   packaged mods get no notice: nothing is done to them.
+
 To do:
 
-1. Tell the player when a mod was brought to their version, as for Wii U mods.
-2. A mod that really takes an actor or a saved flag out of the game no longer does.
-3. The list of texts covers mods made on Switch 1.6.0. A Wii U mod's whole text archives (1.5.0) aren't covered.
+1. A mod that really takes an actor or a saved flag out of the game no longer does.
+2. The list of texts covers mods made on Switch 1.6.0. A Wii U mod's whole text archives (1.5.0) aren't covered.
 
 ## Savage Wind side
 
