@@ -92,3 +92,7 @@ To do:
 Configuration > Mods gets an SWMM+ section: Install (a pinned version, SHA-256 checked, like DLSS), Open, Update and
 Remove. What SWMM+ deploys shows up as a layer in the Mods tab. Tested with Savage Wind testers before it reaches
 `test`.
+
+Done: at each deploy SWMM+ writes `savagewind-mods.txt` at the overlay's root (`origin.rs`): a `#` line with SWMM+'s
+version and the profile, then one line for each enabled mod, the one that wins first, with what it came as (BNP,
+game files or packaged; Switch or Wii U) and its options. Savage Wind copies the lines into `savagewind.log`.

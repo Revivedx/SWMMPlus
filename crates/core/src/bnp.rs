@@ -688,6 +688,8 @@ pub fn unpack_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> {
 }
 
 pub fn convert_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> {
+    crate::origin::start();
+    crate::origin::came_as("BNP");
     let tempdir = unpack_bnp(core, path).with_context(|| {
         format!(
             "Failed to unpack {}",
@@ -718,7 +720,9 @@ pub fn convert_bnp(core: &crate::core::Manager, path: &Path) -> Result<PathBuf> 
             .context("No dump for current platform")?,
     ])
     .with_context(|| format!("Failed to package converted BNP for mod {}", name))?;
-    new_mod.pack()
+    let packaged = new_mod.pack()?;
+    crate::import::note_origin(core, &packaged);
+    Ok(packaged)
 }
 
 #[cfg(test)]

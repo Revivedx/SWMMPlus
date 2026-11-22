@@ -246,6 +246,7 @@ pub fn is_wii_u_tree(root: &Path) -> bool {
 /// `game` are the folders of the game's own files (the base game's and the DLC's), for what a conversion completes
 /// from them.
 pub fn convert_tree(root: &Path, game: &[std::path::PathBuf]) -> Result<Report> {
+    crate::origin::is_wii_u();
     let mut report = Report::default();
     let mut roots = vec![root.to_path_buf()];
     if let Ok(options) = std::fs::read_dir(root.join("options")) {

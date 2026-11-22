@@ -247,6 +247,11 @@ impl Manager {
             if config.layout == DeployLayout::SavageWind {
                 log::info!("Mirroring the merged mods into the Savage Wind overlay");
                 let hard_link = method == DeployMethod::HardLink;
+                // The list of mods Savage Wind copies into its log goes in with the game files.
+                if let Some(mod_manager) = self.mod_manager.upgrade() {
+                    let mods: Vec<mods::Mod> = mod_manager.read().mods().collect();
+                    crate::origin::write_list(&src_content, &settings.platform_dir(), &profile, &mods);
+                }
                 mirror_dir(&src_content, &dest_content, Some("aoc"), hard_link)
                     .context("Failed to update the overlay folder")?;
                 mirror_dir(&src_aoc, &dest_aoc, None, hard_link)

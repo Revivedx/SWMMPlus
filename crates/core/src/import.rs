@@ -37,7 +37,18 @@ const SKIP_EXTS: &[&str] = &[
 
 pub fn convert_any(core: &crate::core::Manager, path: &Path, meta: Option<Meta>) -> Result<PathBuf> {
     log::info!("Looking for a mod in {}", path.display());
-    convert_inner(core, path, meta, 0)
+    crate::origin::start();
+    let packaged = convert_inner(core, path, meta, 0)?;
+    note_origin(core, &packaged);
+    Ok(packaged)
+}
+
+/// Notes what the mod just packaged came as, for the list of mods in Savage Wind's log.
+pub(crate) fn note_origin(core: &crate::core::Manager, packaged: &Path) {
+    if let Ok(reader) = ModReader::open_peek(packaged, vec![]) {
+        let dir = core.settings().platform_dir();
+        crate::origin::finish(&dir, &reader.meta.name, &reader.meta.version);
+    }
 }
 
 fn extension(path: &Path) -> String {
@@ -79,9 +90,11 @@ fn convert_inner(
             return crate::bnp::convert_bnp(core, path);
         }
         if ext == "zip" && ModReader::open_peek(path, vec![]).is_ok() {
+            crate::origin::came_as("packaged");
             return Ok(path.to_path_buf());
         }
     } else if is_ukmm_dir(path) {
+        crate::origin::came_as("packaged");
         return zip_folder(path);
     }
 
@@ -101,6 +114,7 @@ fn convert_inner(
     let dirs = dirs_breadth_first(&dir);
     if let Some(found) = dirs.iter().find(|d| is_ukmm_dir(d)) {
         log::info!("Found a packaged mod at {}", found.display());
+        crate::origin::came_as("packaged");
         return zip_folder(found);
     }
     if let Some(found) = dirs.iter().find(|d| is_bnp_dir(d)) {
@@ -145,6 +159,7 @@ fn convert_inner(
         );
     }
     log::info!("Staged {placed} game files from {}", dir.display());
+    crate::origin::came_as("game files");
     if crate::wiiu::is_wii_u_tree(&staged) {
         let game = {
             let settings = core.settings();
