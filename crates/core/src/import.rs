@@ -236,7 +236,8 @@ fn auto_meta(path: &Path, dir: &Path) -> Meta {
         .collect::<Vec<_>>()
         .join(" ");
     Meta {
-        api: env!("CARGO_PKG_VERSION").into(),
+        // uk-mod's version, not SWMM+'s: uk-mod refuses a mod whose API has another major version (build.rs)
+        api: env!("UK_MOD_VERSION").into(),
         name: if name.is_empty() { "Imported mod".into() } else { name.as_str().into() },
         version: "1.0.0".into(),
         author: Default::default(),
@@ -837,4 +838,22 @@ fn zip_folder(dir: &Path) -> Result<PathBuf> {
     }
     writer.finish()?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A mod made from plain game files gets its meta.yml from auto_meta, and uk-mod must accept the API it carries
+    // ("... build with unsupported UKMM version" when it was SWMM+'s own version, 1.0.0).
+    #[test]
+    fn auto_meta_api_is_accepted_by_uk_mod() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = auto_meta(Path::new("Some Mod"), dir.path());
+        fs::write(dir.path().join("meta.yml"), serde_yaml::to_string(&meta).unwrap()).unwrap();
+        fs::write(dir.path().join("manifest.yml"), serde_yaml::to_string(&uk_mod::Manifest::default()).unwrap())
+            .unwrap();
+        let reader = ModReader::open_peek(dir.path(), vec![]);
+        assert!(reader.is_ok(), "{:?}", reader.err());
+    }
 }
