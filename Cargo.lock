@@ -5589,6 +5589,7 @@ dependencies = [
  "log",
  "parking_lot",
  "path-slash",
+ "png 0.18.1",
  "rayon",
  "remove_dir_all",
  "roead 1.0.0 (git+https://github.com/GingerAvalanche/roead.git)",

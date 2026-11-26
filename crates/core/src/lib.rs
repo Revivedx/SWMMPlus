@@ -4,6 +4,7 @@ pub mod bnp;
 pub mod core;
 pub mod deploy;
 pub mod import;
+pub mod maphd;
 pub mod mods;
 pub mod origin;
 pub mod settings;

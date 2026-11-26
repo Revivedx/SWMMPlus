@@ -171,15 +171,24 @@ fn tegra_address(x: u32, y: u32, width: u32, bytes: u32, block_height: u32) -> u
     gob + ((x % 64) / 32) * 256 + ((y % 8) / 2) * 64 + ((x % 32) / 16) * 32 + (y % 2) * 16 + (x % 16)
 }
 
+#[cfg(test)]
 fn tegra_size(width: u32, height: u32, bytes: u32) -> usize {
-    let block_height = 1 << tegra_block_height_log2(height);
+    tegra_size_at(width, height, bytes, 1 << tegra_block_height_log2(height))
+}
+
+fn tegra_size_at(width: u32, height: u32, bytes: u32, block_height: u32) -> usize {
     (round_up(width * bytes, 64) * round_up(height, block_height * 8)) as usize
 }
 
 /// Plain rows of elements in the Switch's storage order.
 pub fn tegra_swizzle(linear: &[u8], width: u32, height: u32, bytes: u32) -> Vec<u8> {
-    let block_height = 1 << tegra_block_height_log2(height);
-    let mut out = vec![0u8; tegra_size(width, height, bytes)];
+    tegra_swizzle_at(linear, width, height, bytes, tegra_block_height_log2(height))
+}
+
+/// The same with a block height of its own (a texture that is replaced keeps the one its header says).
+pub fn tegra_swizzle_at(linear: &[u8], width: u32, height: u32, bytes: u32, block_height_log2: u32) -> Vec<u8> {
+    let block_height = 1 << block_height_log2.min(4);
+    let mut out = vec![0u8; tegra_size_at(width, height, bytes, block_height)];
     for y in 0..height {
         for x in 0..width {
             let to = tegra_address(x, y, width, bytes, block_height) as usize;
