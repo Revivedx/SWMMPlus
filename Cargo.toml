@@ -57,3 +57,7 @@ zstd = { version = "0.13.1", features = ["experimental"] }
 lto = "thin"
 codegen-units = 4
 strip = true
+
+# piz 0.5.1 with one fix (crates/piz/src/spec.rs, parse_extra_field): see crates/piz/README-SWMM.md
+[patch.crates-io]
+piz = { path = "crates/piz" }
