@@ -1,0 +1,34 @@
+[package]
+name = "piz"
+version = "0.5.1"
+edition = "2021"
+authors = ["Matt Kline <matt@bitbashing.io>"]
+license = "Zlib"
+repository = "https://github.com/mrkline/piz-rs"
+readme = "README.md"
+documentation = "https://docs.rs/piz"
+description = """
+piz (a Parallel Implementation of Zip)
+is a ZIP archive reader designed to concurrently decompress files
+using a simple API.
+"""
+keywords = ["zip", "archive", "parallel", "thread", "concurrency"]
+categories = ["compression", "concurrency"]
+publish = false
+
+[lib]
+doctest = false  # (its examples need piz's own dev-dependencies, left out here)
+
+[dependencies]
+camino = "1.0"
+codepage-437 = "0.1"
+crc32fast = "1.0"
+flate2 = "1.0"
+log = "0.4"
+thiserror = "1.0"
+memchr = "2.0"
+chrono = "0.4"
+
+[features]
+default = ["check-local-metadata"]
+check-local-metadata = []
