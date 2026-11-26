@@ -34,6 +34,27 @@ xflags::xflags! {
         cmd remerge {}
         cmd deploy {}
         cmd status {}
+        /// A sharper world map made from your own game files: every map tile cleaned with Real-ESRGAN, as a mod.
+        /// The whole map takes hours on a GPU. The mod holds your game's map textures, so don't share it.
+        cmd maphd {
+            /// Where the mod is made (it gets romfs/UI/MapTex/MainField/); install it like any mod afterwards.
+            required folder: PathBuf
+            /// realesrgan-ncnn-vulkan (https://github.com/xinntao/Real-ESRGAN/releases, the ncnn Vulkan
+            /// download), with its models folder next to it: realesr-animevideov3-x2 is used.
+            required --esrgan exe: PathBuf
+            /// 1 (default): each tile cleaned at its own size. 2: the two closest zoom levels at twice the size,
+            /// for windows above 1080p (about 11 GB more).
+            optional --scale n: u32
+            /// Where the in-between images go (default: <folder>-work, about 20 GB). A stopped run goes on where
+            /// it was; delete the folder afterwards.
+            optional --work dir: PathBuf
+            /// Threads for decoding and encoding (default: half the CPU threads).
+            optional --jobs n: usize
+            /// The game's romfs folder (default: the one Savage Wind uses).
+            optional --romfs dir: PathBuf
+            /// Only the tiles whose file names match, for example MapTex*_D-3*, to try it on a few first.
+            optional --only pattern: String
+        }
     }
 }
 #[derive(Debug)]
@@ -53,6 +74,7 @@ pub enum SwmmCmd {
     Remerge(Remerge),
     Deploy(Deploy),
     Status(Status),
+    Maphd(Maphd),
 }
 
 #[derive(Debug)]
@@ -82,6 +104,17 @@ pub struct Deploy;
 
 #[derive(Debug)]
 pub struct Status;
+
+#[derive(Debug)]
+pub struct Maphd {
+    pub folder: PathBuf,
+    pub esrgan: PathBuf,
+    pub scale: Option<u32>,
+    pub work: Option<PathBuf>,
+    pub jobs: Option<usize>,
+    pub romfs: Option<PathBuf>,
+    pub only: Option<String>,
+}
 
 impl Swmm {
     #[allow(dead_code)]
@@ -213,6 +246,37 @@ impl Runner {
         Ok(())
     }
 
+    fn maphd(&self, args: &Maphd) -> Result<()> {
+        let romfs = match &args.romfs {
+            Some(romfs) => romfs.clone(),
+            None => swmm_core::savage_wind::current_game_files(&self.core.settings())?.romfs,
+        };
+        let only = args
+            .only
+            .as_deref()
+            .map(glob::Pattern::new)
+            .transpose()
+            .context("--only isn't a file name pattern")?;
+        let options = swmm_core::maphd::Options {
+            romfs,
+            mod_dir: args.folder.clone(),
+            work: args.work.clone(),
+            esrgan: args.esrgan.clone(),
+            scale: args.scale.unwrap_or(1),
+            jobs: args.jobs,
+            only,
+        };
+        let work = swmm_core::maphd::make(&options, &|line| println!("{line}"))?;
+        println!(
+            "Made {}: install it like any mod (drop the folder on the window, or swmm install). The work folder \
+             ({}) can be deleted.",
+            args.folder.display(),
+            work.display()
+        );
+        println!("The mod holds your game's map textures, changed: don't share it.");
+        Ok(())
+    }
+
     pub fn run(self) -> Result<()> {
         if self.cli.debug {
             env_logger::init();
@@ -312,6 +376,7 @@ impl Runner {
             }
             SwmmCmd::Deploy(_) => self.deploy()?,
             SwmmCmd::Status(_) => self.status()?,
+            SwmmCmd::Maphd(args) => self.maphd(args)?,
         };
         Ok(())
     }

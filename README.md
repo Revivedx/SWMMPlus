@@ -33,6 +33,18 @@
 3. Add mods by dragging them onto the window or from the **Browse** page.
 4. Press **Play**.
 
+## A sharper world map
+
+SWMM can make a mod with a sharper world map from your own game files: every map tile is cleaned with
+[Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN/releases) (the "ncnn Vulkan" download) and compressed again.
+
+    swmm maphd <mod folder> --esrgan <realesrgan-ncnn-vulkan> [--scale 2]
+
+It takes hours on a GPU and about 20 GB for its in-between images (`--work` sets where they go; a stopped run goes
+on where it was). `--scale 2` stores the two closest zoom levels at twice the size, for windows above 1080p. Then
+install the folder like any mod. The mod holds your game's map textures, so don't share it. `swmm --help` lists the
+other options.
+
 ## Building
 
 Install [Rust](https://rustup.rs), then run `build-windows.bat` on Windows or `build.sh` on Linux. The finished
